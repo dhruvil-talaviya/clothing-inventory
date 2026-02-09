@@ -1,33 +1,32 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 
-// IMPORTS - DOUBLE CHECK THESE PATHS
-// Ensure these files actually exist in your src/pages folder!
+// --- PAGE IMPORTS ---
 import Login from './pages/Login';
+import SetPassword from './pages/SetPassword';
 import AdminDashboard from './pages/Admin/AdminDashboard';
-import StaffDashboard from "./pages/StaffDashboard";
-import SetPassword from './pages/SetPassword'; 
+import StaffDashboard from './pages/StaffDashboard';
 
-// Protection Logic with Debugging
+import AdminEvents from "./pages/Admin/AdminEvents";
+
+// --- PROTECTION LOGIC ---
 const ProtectedRoute = ({ children, allowedRole }) => {
   const token = localStorage.getItem('token');
   const role = localStorage.getItem('role');
 
-  console.log("Checking Protection:", { token, role, allowedRole }); // 🔍 DEBUG LOG
 
   if (!token) {
-    console.log("No token found. Redirecting to Login...");
     return <Navigate to="/" replace />;
   }
 
   if (allowedRole && role !== allowedRole) {
-    console.log(`Role mismatch! Needed: ${allowedRole}, Found: ${role}. Redirecting...`);
     return <Navigate to="/" replace />;
   }
   
   return children;
 };
 
+// --- MAIN APP COMPONENT ---
 function App() {
   return (
     <Router>
@@ -37,7 +36,7 @@ function App() {
         <Route path="/" element={<Login />} />
         <Route path="/set-password" element={<SetPassword />} />
 
-        {/* Admin Route (Protected) */}
+        {/* --- ADMIN ROUTES (Protected) --- */}
         <Route 
           path="/admin/dashboard" 
           element={
@@ -46,8 +45,18 @@ function App() {
             </ProtectedRoute>
           } 
         />
+        
+        {/* NEW EVENTS ROUTE ADDED HERE */}
+        <Route 
+          path="/admin/events" 
+          element={
+            <ProtectedRoute allowedRole="admin">
+              <AdminEvents />
+            </ProtectedRoute>
+          } 
+        />
 
-        {/* Staff Route (Protected) */}
+        {/* --- STAFF ROUTES (Protected) --- */}
         <Route 
           path="/staff/dashboard" 
           element={

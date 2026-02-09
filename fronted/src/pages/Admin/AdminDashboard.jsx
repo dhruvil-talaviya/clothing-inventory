@@ -1,16 +1,19 @@
-import React, { useState } from 'react'; // Removed useEffect since we aren't using it anymore
+import React, { useState } from 'react'; 
 import { useNavigate } from 'react-router-dom';
 import { 
-    FiGrid, FiBox, FiUsers, FiSettings, FiLogOut, FiPercent 
-} from 'react-icons/fi';
+    FiGrid, FiBox, FiUsers, FiSettings, FiLogOut, FiPercent, FiCalendar 
+} from 'react-icons/fi'; // 1. Added FiCalendar here
 
 // Import the Sub-Pages
-// MAKE SURE THESE FILES EXIST IN src/pages/admin/tabs/
 import AdminOverview from './tabs/AdminOverview';
 import AdminInventory from './tabs/AdminInventory';
 import AdminOffers from './tabs/AdminOffers';
 import AdminStaff from './tabs/AdminStaff';
 import AdminSettings from './tabs/AdminSettings';
+
+// 2. Import your new Events page
+// Ensure AdminEvents.jsx is in the same folder as this file (src/pages/Admin/)
+import AdminEvents from './AdminEvents'; 
 
 const AdminDashboard = () => {
     const navigate = useNavigate();
@@ -28,13 +31,11 @@ const AdminDashboard = () => {
             case 'products': return <AdminInventory />;
             case 'offers':   return <AdminOffers />;
             case 'staff':    return <AdminStaff />;
+            case 'events':   return <AdminEvents />; // 3. Added Case for Events
             case 'settings': return <AdminSettings />;
             default: return <AdminOverview />;
         }
     };
-
-    // --- DELETED THE BROKEN USEEFFECT BLOCK HERE ---
-    // The sub-components (AdminOverview, AdminInventory) should handle their own data fetching.
 
     return (
         <div className="flex h-screen bg-[#0f172a] text-slate-200 font-sans overflow-hidden">
@@ -44,11 +45,16 @@ const AdminDashboard = () => {
                 <div className="h-24 flex items-center px-8 border-b border-slate-800 bg-[#1e293b]">
                     <h1 className="text-xl font-black tracking-widest text-white">STYLE<span className="text-indigo-500">SYNC</span></h1>
                 </div>
-                <nav className="p-4 space-y-2 flex-1">
+                <nav className="p-4 space-y-2 flex-1 overflow-y-auto">
                     <NavButton id="overview" label="Dashboard" icon={<FiGrid/>} active={activeTab} onClick={setActiveTab} />
                     <NavButton id="products" label="Inventory" icon={<FiBox/>} active={activeTab} onClick={setActiveTab} />
                     <NavButton id="offers" label="Discounts" icon={<FiPercent/>} active={activeTab} onClick={setActiveTab} />
                     <NavButton id="staff" label="Team" icon={<FiUsers/>} active={activeTab} onClick={setActiveTab} />
+                    
+                    {/* 4. Added Events Button Here */}
+                    <NavButton id="events" label="Events & Fest" icon={<FiCalendar/>} active={activeTab} onClick={setActiveTab} />
+                    
+                    <div className="my-2 border-t border-slate-700 mx-4"></div>
                     <NavButton id="settings" label="Admin" icon={<FiSettings/>} active={activeTab} onClick={setActiveTab} />
                 </nav>
             </aside>
@@ -77,14 +83,13 @@ const AdminDashboard = () => {
                     </div>
                 </header>
 
-                <main className="flex-1 overflow-y-auto p-8">
+                <main className="flex-1 overflow-y-auto p-8 custom-scrollbar">
                     {renderContent()}
                 </main>
             </div>
         </div>
     );
 };
-
 
 const NavButton = ({ id, label, icon, active, onClick }) => (
     <button onClick={() => onClick(id)} className={`w-full flex items-center gap-4 px-5 py-4 rounded-xl transition-all font-bold text-sm ${active === id ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-800 hover:text-white'}`}>

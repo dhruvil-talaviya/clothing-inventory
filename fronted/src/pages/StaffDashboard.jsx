@@ -5,10 +5,11 @@ import { useReactToPrint } from 'react-to-print';
 import { 
     FiHome, FiSearch, FiShoppingCart, FiTrash2, FiLogOut, 
     FiGrid, FiSettings, FiX, FiPackage, FiClock,
-    FiFileText, FiUser, FiPhone, FiCheckCircle, FiEdit2,
-    FiPlus, FiMinus, FiTag, FiCreditCard, FiAlertTriangle, FiEye, FiMapPin, FiShield, FiLock, FiTrendingUp, FiSave
+    FiFileText, FiUser, FiCheckCircle, FiEdit2,
+    FiPlus, FiMinus, FiTag, FiCreditCard, FiAlertTriangle, FiEye, FiShield, FiLock, FiSave, FiPrinter
 } from 'react-icons/fi';
 
+// Ensure you have the Invoice.jsx file in components folder
 import { Invoice } from "../components/Invoice";
 
 // --- STATIC DATA ---
@@ -19,19 +20,16 @@ const StaffDashboard = () => {
     const navigate = useNavigate();
     const [view, setView] = useState('pos'); 
     
-    // --- 1. SAFE USER LOADING ---
+    // --- USER LOADING ---
     const [user, setUser] = useState(() => {
-        try {
-            const saved = localStorage.getItem('user');
-            return saved ? JSON.parse(saved) : null;
-        } catch { return null; }
+        try { return JSON.parse(localStorage.getItem('user')); } catch { return null; }
     });
     
     // Data States
     const [products, setProducts] = useState([]);
     const [activeOffers, setActiveOffers] = useState([]);
     const [stats, setStats] = useState({ todayRevenue: 0, todayCount: 0, history: [] }); 
-    const [salesHistory, setSalesHistory] = useState([]); // Explicit state for history view
+    const [salesHistory, setSalesHistory] = useState([]); 
 
     // Filters & Cart
     const [search, setSearch] = useState(''); 
@@ -63,14 +61,26 @@ const StaffDashboard = () => {
     const [showCityDropdown, setShowCityDropdown] = useState(false);
     const [filteredCities, setFilteredCities] = useState([]);
 
-    // Printing
+    // --- PRINTING LOGIC (FIXED) ---
     const [printData, setPrintData] = useState(null);
-    const invoiceRef = useRef();
+    const invoiceRef = useRef(); 
+
+    // 1. Setup the Print Hook
     const handlePrint = useReactToPrint({ 
         content: () => invoiceRef.current,
-        onAfterPrint: () => setPrintData(null)
+        documentTitle: () => `Invoice-${Date.now()}`,
+        onAfterPrint: () => setPrintData(null), // Clear data after print
+        removeAfterPrint: true
     });
 
+    // 2. AUTOMATIC TRIGGER: Watch for when 'printData' is ready
+    useEffect(() => {
+        if (printData && invoiceRef.current) {
+            handlePrint();
+        }
+    }, [printData, handlePrint]);
+
+    // --- IMAGES ---
     const getProductImage = (productName, cat) => {
         const name = productName ? productName.toLowerCase() : "";
         if (name.includes('t-shirt')) return "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=400&q=80";
@@ -98,7 +108,6 @@ const StaffDashboard = () => {
         if (!userId) return; 
 
         try {
-            // Fetch Products, Stats, Offers, and ALL Sales History
             const [prodRes, statRes, offerRes, salesRes] = await Promise.all([
                 axios.get('http://localhost:5001/api/staff/products').catch(() => ({ data: [] })),
                 axios.get(`http://localhost:5001/api/staff/stats/${userId}`).catch(() => ({ data: {} })),
@@ -106,11 +115,9 @@ const StaffDashboard = () => {
                 axios.get('http://localhost:5001/api/staff/sales-history').catch(() => ({ data: [] }))
             ]);
 
-            // 1. Filter hidden products
             const rawProducts = Array.isArray(prodRes.data) ? prodRes.data : [];
             setProducts(rawProducts.filter(p => p.isAvailable !== false && p.isAvailable !== "false"));
             
-            // 2. Set Stats
             const safeStats = statRes.data || {};
             setStats({
                 todayRevenue: safeStats.todayRevenue || 0,
@@ -118,11 +125,8 @@ const StaffDashboard = () => {
                 history: Array.isArray(safeStats.history) ? safeStats.history : []
             });
 
-            // 3. Set Active Offers
             setActiveOffers(Array.isArray(offerRes.data) ? offerRes.data.filter(o => o.isActive) : []);
 
-            // 4. FILTER SALES HISTORY (Security Check)
-            // Ensure data exists before filtering
             const allSales = Array.isArray(salesRes.data) ? salesRes.data : [];
             const mySalesOnly = allSales.filter(sale => 
                 sale.staffEmail === user.email || sale.staffId === userId || sale.soldBy === userId
@@ -194,6 +198,7 @@ const StaffDashboard = () => {
         }
     };
 
+    // --- CALCULATIONS ---
     const subtotal = cart.reduce((acc, item) => acc + (item.price * item.qty), 0);
     let discountVal = 0;
     if (selectedDiscount && subtotal >= selectedDiscount.minOrder) {
@@ -201,6 +206,7 @@ const StaffDashboard = () => {
     }
     const finalTotal = Math.max(0, subtotal - discountVal);
 
+    // --- SUBMIT BILL ---
     const confirmAndGenerateBill = async (e) => {
         e.preventDefault();
         const userId = user?.id || user?._id;
@@ -215,13 +221,26 @@ const StaffDashboard = () => {
                 subtotal, discount: selectedDiscount ? { code: selectedDiscount.code, amount: discountVal } : null, totalAmount: finalTotal
             };
 
-            await axios.post('http://localhost:5001/api/staff/create-sale', saleData);
-            setPrintData({ products: [...cart], totalAmount: finalTotal, subtotal, discount: discountVal, date: Date.now(), ...customerForm });
+            const res = await axios.post('http://localhost:5001/api/staff/create-sale', saleData);
+            
+            const newSale = { 
+                _id: res.data.sale?._id || Date.now().toString(),
+                items: [...cart], 
+                totalAmount: finalTotal, 
+                subtotal, 
+                discount: discountVal, 
+                date: Date.now(), 
+                ...customerForm 
+            };
+
+            // This update triggers the useEffect above
+            setPrintData(newSale);
+            
             showNotification('✅ Sale Completed!'); 
             setCart([]); setSelectedDiscount(null); setShowBillModal(false); setCustomerForm({ name: '', phone: '', homeAddress: '', city: '' });
             fetchDashboardData();
-            setTimeout(() => { if (invoiceRef.current) handlePrint(); }, 500);
-        } catch (err) { alert("Transaction Failed."); }
+            
+        } catch (err) { console.error(err); alert("Transaction Failed."); }
     };
 
     const filteredProducts = products.filter(p => {
@@ -231,7 +250,6 @@ const StaffDashboard = () => {
     });
 
     const shiftDuration = new Date(currentTime - shiftStart).toISOString().substr(11, 8);
-    // const progress = Math.min(((stats.todayRevenue || 0) / 5000) * 100, 100);
 
     return (
         <div className="flex h-screen bg-[#080C14] font-sans text-slate-200 overflow-hidden relative">
@@ -332,7 +350,6 @@ const StaffDashboard = () => {
                             <table className="w-full text-left text-sm text-slate-300">
                                 <thead className="bg-[#131C31] text-xs font-bold uppercase text-slate-400"><tr><th className="p-5">Bill ID</th><th className="p-5">Customer</th><th className="p-5">Items</th><th className="p-5">Amount</th><th className="p-5">Date</th><th className="p-5 text-right">View</th></tr></thead>
                                 <tbody className="divide-y divide-slate-800">
-                                    {/* Using salesHistory state which is already filtered for this staff */}
                                     {salesHistory.filter(h => h._id.includes(historySearch) || h.customerName?.toLowerCase().includes(historySearch.toLowerCase())).map(s => (
                                     <tr key={s._id} className="hover:bg-slate-800/30 transition"><td className="p-5 font-mono text-indigo-400 font-bold">#{s._id.slice(-6).toUpperCase()}</td><td className="p-5"><div className="font-bold text-white">{s.customerName}</div><div className="text-[10px] text-slate-500">{s.customerPhone}</div></td><td className="p-5">{s.items?.length || s.cart?.length || 0} items</td><td className="p-5 text-emerald-400 font-bold">${(s.totalAmount || 0).toFixed(2)}</td><td className="p-5 text-slate-500">{new Date(s.date || s.createdAt).toLocaleString()}</td><td className="p-5 text-right"><button onClick={() => setSelectedSale(s)} className="p-2 bg-slate-800 text-slate-400 hover:text-white rounded-lg"><FiEye/></button></td></tr>))}
                                     {salesHistory.length === 0 && (
@@ -400,45 +417,96 @@ const StaffDashboard = () => {
                                 <input required placeholder="Phone" className="w-full bg-[#0F172A] border border-slate-700 rounded-xl p-3 text-white outline-none focus:border-indigo-500" value={customerForm.phone} onChange={e => { if(/^\d{0,10}$/.test(e.target.value)) setCustomerForm({...customerForm, phone: e.target.value}) }}/>
                             </div>
                             <input required placeholder="Address" className="w-full bg-[#0F172A] border border-slate-700 rounded-xl p-3 text-white outline-none focus:border-indigo-500" value={customerForm.homeAddress} onChange={e => setCustomerForm({...customerForm, homeAddress: e.target.value})}/>
+                            
+                            {/* CITY WITH AUTOCOMPLETE */}
                             <div className="relative">
-                                <input required placeholder="City" className="w-full bg-[#0F172A] border border-slate-700 rounded-xl p-3 text-white outline-none focus:border-indigo-500" value={customerForm.city} onChange={handleCityInput}/>
-                                {showCityDropdown && <div className="absolute top-full left-0 w-full bg-[#0F172A] border border-slate-700 rounded-xl mt-1 max-h-40 overflow-y-auto z-50 shadow-xl custom-scrollbar">{filteredCities.map((city, i) => (<div key={i} className="p-3 hover:bg-indigo-600 hover:text-white cursor-pointer text-slate-300" onClick={() => { setCustomerForm({...customerForm, city}); setShowCityDropdown(false); }}>{city}</div>))}</div>}
+                                <input required placeholder="City" 
+                                    className="w-full bg-[#0F172A] border border-slate-700 rounded-xl p-3 text-white outline-none focus:border-indigo-500" 
+                                    value={customerForm.city} 
+                                    onChange={handleCityInput}
+                                    onFocus={() => customerForm.city && setShowCityDropdown(true)}
+                                />
+                                {showCityDropdown && filteredCities.length > 0 && (
+                                    <ul className="absolute z-50 w-full bg-[#1E293B] border border-slate-700 rounded-xl mt-1 max-h-40 overflow-y-auto shadow-xl custom-scrollbar">
+                                        {filteredCities.map((city, index) => (
+                                            <li 
+                                                key={index} 
+                                                onClick={() => {
+                                                    setCustomerForm({ ...customerForm, city });
+                                                    setShowCityDropdown(false);
+                                                }}
+                                                className="px-4 py-2 hover:bg-indigo-600 cursor-pointer text-sm text-slate-300 hover:text-white"
+                                            >
+                                                {city}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
                             </div>
-                            <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-xl mt-4 transition-all shadow-lg flex items-center justify-center gap-2"><FiCheckCircle/> Confirm & Print Bill</button>
+                            
+                            <div className="bg-[#0F172A] p-4 rounded-xl border border-slate-800 space-y-2">
+                                <div className="flex justify-between text-slate-400 text-sm"><span>Subtotal:</span><span>${subtotal.toFixed(2)}</span></div>
+                                <div className="flex justify-between text-emerald-400 text-sm"><span>Discount:</span><span>-${discountVal.toFixed(2)}</span></div>
+                                <div className="flex justify-between text-white font-bold text-xl pt-2 border-t border-slate-700"><span>To Pay:</span><span>${finalTotal.toFixed(2)}</span></div>
+                            </div>
+
+                            <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2">
+                                <FiCheckCircle size={20}/> Confirm & Print Bill
+                            </button>
                         </form>
                     </div>
                 </div>
             )}
-            
-            {/* INVOICE PREVIEW MODAL */}
+
+            {/* --- INVOICE VIEW MODAL (History) --- */}
             {selectedSale && (
                 <div className="fixed inset-0 bg-black/90 z-[300] flex items-center justify-center p-4 backdrop-blur-sm">
-                    <div className="bg-white rounded-lg p-6 max-w-2xl w-full h-[90vh] overflow-y-auto text-black relative">
-                        <button onClick={() => setSelectedSale(null)} className="absolute top-4 right-4 text-black hover:text-red-600"><FiX size={28}/></button>
-                        <Invoice data={selectedSale} />
+                    <div className="bg-white rounded-lg w-full max-w-2xl h-[90vh] flex flex-col relative shadow-2xl">
+                        <div className="flex justify-between items-center p-4 border-b border-gray-200">
+                            <h2 className="text-lg font-bold text-gray-800">Invoice Details</h2>
+                            <div className="flex gap-2">
+                                <button 
+                                    onClick={handlePrint} 
+                                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded transition-colors"
+                                >
+                                    <FiPrinter /> Print
+                                </button>
+                                <button onClick={() => setSelectedSale(null)} className="p-2 text-gray-500 hover:bg-red-100 hover:text-red-600 rounded-full"><FiX size={24}/></button>
+                            </div>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-6 bg-gray-50 custom-scrollbar text-black">
+                            <Invoice sale={selectedSale} />
+                        </div>
                     </div>
                 </div>
             )}
 
-            {/* HIDDEN INVOICE FOR PRINTING */}
-            <div style={{ display: 'none' }}><Invoice ref={invoiceRef} data={printData} /></div>
+            {/* --- HIDDEN PRINT COMPONENT --- */}
+            {/* FIXED: We use opacity 0 instead of hidden so the browser sees it, but the user doesn't. */}
+            <div style={{ position: "fixed", top: "100%", left: 0, opacity: 0, pointerEvents: "none" }}>
+                <Invoice ref={invoiceRef} sale={printData || selectedSale} />
+            </div>
+
         </div>
     );
 };
 
-// Reusable Components
+// --- HELPER COMPONENTS ---
 const NavIcon = ({ icon, active, onClick, label }) => (
-    <div className="relative group flex justify-center">
-        <button onClick={onClick} className={`p-3 rounded-xl transition-all ${active ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30' : 'text-slate-500 hover:bg-[#1E293B] hover:text-white'}`}>{icon}</button>
-        <span className="absolute left-16 bg-white text-slate-900 text-xs font-bold px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-lg">{label}</span>
-    </div>
+    <button onClick={onClick} className={`p-3 rounded-xl transition-all relative group ${active ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30' : 'text-slate-500 hover:bg-slate-800 hover:text-white'}`}>
+        {icon}
+        <span className="absolute left-14 bg-white text-slate-900 text-xs font-bold px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+            {label}
+        </span>
+    </button>
 );
 
 const StatCard = ({ title, value, icon, color }) => (
-    <div className={`bg-[#0F172A] rounded-2xl border border-slate-800 p-6 flex items-center justify-between shadow-lg relative overflow-hidden group hover:-translate-y-1 transition-transform cursor-default`}>
-        <div className={`absolute top-0 left-0 w-1 h-full bg-${color}-500`}></div>
-        <div><p className="text-slate-500 text-xs uppercase font-bold tracking-widest mb-1">{title}</p><h3 className="text-3xl font-black text-white">{value}</h3></div>
-        <div className={`p-4 bg-${color}-500/10 text-${color}-400 rounded-2xl group-hover:scale-110 transition-transform`}>{icon}</div>
+    <div className={`bg-[#0F172A] p-6 rounded-3xl border border-slate-800 shadow-xl relative overflow-hidden group hover:border-${color}-500/50 transition-all`}>
+        <div className={`absolute top-0 right-0 p-4 opacity-10 text-${color}-500 group-hover:scale-110 transition-transform`}>{React.cloneElement(icon, { size: 60 })}</div>
+        <div className={`w-12 h-12 bg-${color}-500/10 rounded-2xl flex items-center justify-center text-${color}-400 mb-4 text-xl`}>{icon}</div>
+        <p className="text-slate-500 text-sm font-bold uppercase tracking-wider">{title}</p>
+        <h3 className="text-2xl font-black text-white mt-1">{value}</h3>
     </div>
 );
 
