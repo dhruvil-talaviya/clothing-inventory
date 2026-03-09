@@ -1,54 +1,85 @@
-const express = require('express');
-const router = express.Router();
+const express  = require('express');
+const router   = express.Router();
+const mongoose = require('mongoose');
+const bcrypt   = require('bcryptjs');
+const multer   = require('multer');
+const path     = require('path');
+const fs       = require('fs');
 const { Product, Sale, User } = require('../models/Schemas');
 
+// ─── MULTER SETUP (profile photo uploads) ────────────────────────────────────
+const uploadsDir = path.join(__dirname, '../uploads');
+if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
-const { verifyToken } = require('../middleware/auth'); 
-
-router.get('/dashboard-stats', verifyToken, async (req, res) => {
-    try {
-        // Your logic for dashboard stats...
-        res.json({ message: "Stats loaded" }); // (Replace with your actual logic)
-    } catch (error) {
-        res.status(500).json({ message: "Server Error" });
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => cb(null, uploadsDir),
+    filename:    (req, file, cb) => {
+        const ext = path.extname(file.originalname).toLowerCase();
+        cb(null, `staff_${req.params.id}_${Date.now()}${ext}`);
     }
 });
 
+const upload = multer({
+    storage,
+    limits: { fileSize: 3 * 1024 * 1024 }, // 3MB
+    fileFilter: (req, file, cb) => {
+        const allowed = /jpeg|jpg|png|webp/;
+        const validExt  = allowed.test(path.extname(file.originalname).toLowerCase());
+        const validMime = allowed.test(file.mimetype);
+        if (validExt && validMime) cb(null, true);
+        else cb(new Error('Only JPG, PNG, WEBP images are allowed'));
+    }
+});
 
-
-
-// --- 1. GET ALL PRODUCTS ---
+// ─── 1. GET ALL PRODUCTS ──────────────────────────────────────────────────────
 router.get('/products', async (req, res) => {
     try {
-        const products = await Product.find().sort({ createdAt: -1 });
+        const products = await Product.find({ isAvailable: true, stock: { $gt: 0 } });
         res.json(products);
     } catch (err) {
         res.status(500).json({ message: "Error fetching products" });
     }
 });
 
-// --- 2. CREATE SALE ---
+// ─── 2. CREATE NEW SALE ───────────────────────────────────────────────────────
 router.post('/create-sale', async (req, res) => {
-    const { items, soldBy, customerName, customerPhone, customerAddress, storeLocation, subtotal, discount, totalAmount } = req.body;
-
     try {
-        if (!items || items.length === 0) return res.status(400).json({ message: "Cart is empty" });
+        const {
+            items,
+            soldBy,
+            staffId,
+            staffName,
+            customerName, customerPhone, customerAddress, storeLocation,
+            subtotal, discount, totalAmount
+        } = req.body;
 
-        // Update Stock
+        if (!soldBy || !items || items.length === 0) {
+            return res.status(400).json({ message: "Invalid sale data. Check items and staff ID." });
+        }
+
+        // Check stock availability BEFORE processing
         for (const item of items) {
             const product = await Product.findById(item.productId);
-            if (product) {
-                product.stock = Math.max(0, product.stock - item.quantity);
-                await product.save();
+            if (!product || product.stock < item.quantity) {
+                return res.status(400).json({ message: `Insufficient stock for ${item.name}` });
             }
         }
 
-        // Save Sale
+        // Deduct stock
+        for (const item of items) {
+            await Product.findByIdAndUpdate(item.productId, {
+                $inc: { stock: -item.quantity }
+            });
+        }
+
         const newSale = new Sale({
-            items, // Stores new format
-            soldBy,
-            customerName: customerName || "Walk-in",
-            customerPhone: customerPhone || "N/A",
+            invoiceId:       `INV-${Date.now().toString().slice(-6).toUpperCase()}`,
+            items,
+            soldBy:          soldBy.toString(),
+            staffId:         staffId   || 'N/A',
+            staffName:       staffName || 'Staff',
+            customerName:    customerName || 'Walk-in Customer',
+            customerPhone,
             customerAddress,
             storeLocation,
             subtotal,
@@ -58,113 +89,127 @@ router.post('/create-sale', async (req, res) => {
         });
 
         await newSale.save();
-        res.status(201).json({ message: "Sale Success", sale: newSale });
+        res.status(201).json({ message: "Sale successful", sale: newSale });
 
     } catch (err) {
-        console.error("Sale Error:", err);
-        res.status(500).json({ message: "Server Error" });
+        console.error("Sale Transaction Error:", err);
+        res.status(500).json({ message: "Checkout Failed: " + err.message });
     }
 });
 
-// --- 3. GET STATS & HISTORY (THE FIX) ---
-router.get('/stats/:id', async (req, res) => {
+// ─── 3. GET DAILY STATS ───────────────────────────────────────────────────────
+router.get('/daily-stats/:staffId', async (req, res) => {
     try {
-        const now = new Date();
-        const startOfDay = new Date(now.setHours(0,0,0,0));
-        
-        // FIX: Remove { soldBy: id } to show ALL store history
-        // We fetch the last 50 sales regardless of who sold them
-        const sales = await Sale.find()
-            .sort({ date: -1 }) 
-            .limit(50); 
-        
-        // Calculate Today's Stats (Store Wide)
-        const todaySales = sales.filter(s => {
-            const saleDate = new Date(s.date || s.createdAt);
-            return saleDate >= startOfDay;
+        const { staffId } = req.params;
+        const start = new Date(); start.setHours(0,  0,  0,   0);
+        const end   = new Date(); end.setHours(23,  59, 59, 999);
+
+        const todaySales = await Sale.find({
+            $or: [{ soldBy: staffId }, { staffId: staffId }],
+            date: { $gte: start, $lte: end }
         });
 
-        const todayRevenue = todaySales.reduce((sum, s) => sum + (s.totalAmount || 0), 0);
-        
-        // FIX: Handle both 'items' (new) and 'products' (old)
-        const todayCount = todaySales.reduce((sum, s) => {
-            const list = s.items || s.products || [];
-            return sum + list.length;
-        }, 0);
-
-        res.json({ 
-            todayRevenue, 
-            todayCount, 
-            history: sales // Returns mixed old/new data
-        });
-
+        const revenue = todaySales.reduce((sum, s) => sum + (Number(s.totalAmount) || 0), 0);
+        res.json({ revenue, count: todaySales.length });
     } catch (err) {
-        console.error("Stats Error:", err);
-        res.status(500).json({ message: "Stats Error" });
+        res.status(500).json({ revenue: 0, count: 0 });
     }
 });
 
-// ... imports ...
-
-// GET PERSONAL STATS (Fixes the "Seeing other staff sales" error)
-router.get('/stats/:id', async (req, res) => {
+// ─── 4. GET FULL SALES HISTORY ────────────────────────────────────────────────
+router.get('/history/:staffId', async (req, res) => {
     try {
-        const { id } = req.params;
-        const now = new Date();
-        const startOfDay = new Date(now.setHours(0,0,0,0));
-
-        // 1. Fetch ONLY sales sold by THIS staff ID
-        const mySales = await Sale.find({ soldBy: id }).sort({ date: -1 });
-
-        // 2. Calculate Personal Stats
-        const todaySales = mySales.filter(s => new Date(s.date) >= startOfDay);
-        
-        const todayRevenue = todaySales.reduce((sum, s) => sum + (s.totalAmount || 0), 0);
-        const todayCount = todaySales.length;
-
-        res.json({ 
-            todayRevenue, 
-            todayCount, 
-            history: mySales // Only returns THEIR history
-        });
-
+        const { staffId } = req.params;
+        const history = await Sale.find({
+            $or: [{ soldBy: staffId }, { staffId: staffId }]
+        }).sort({ date: -1 });
+        res.json(history);
     } catch (err) {
-        res.status(500).json({ message: "Stats Error" });
+        res.status(500).json([]);
     }
 });
 
-
-router.put('/profile/:id', async (req, res) => {
+// ─── 5. UPDATE PROFILE (with optional photo upload) ───────────────────────────
+router.put('/profile/:id', upload.single('photo'), async (req, res) => {
     try {
-        const { name, phone, address, password } = req.body;
-        
-        const updateData = { name, phone, address };
-        // Only update password if sent (and not empty)
-        if (password && password.trim() !== "") {
-            updateData.password = password; // In real app, hash this!
+        const { name, phone, address, email, city } = req.body;
+        const userId = req.params.id;
+
+        // Build update object — only include fields that were actually sent
+        const updateData = {};
+        if (name    !== undefined) updateData.name    = name.trim();
+        if (phone   !== undefined) updateData.phone   = phone.trim();
+        if (address !== undefined) updateData.address = address.trim();
+        if (email   !== undefined) updateData.email   = email.trim();
+        if (city    !== undefined) updateData.city    = city.trim();
+
+        // If a new photo was uploaded, save its public URL
+        if (req.file) {
+            updateData.photo = `http://localhost:5001/uploads/${req.file.filename}`;
         }
 
-        const updatedUser = await User.findByIdAndUpdate(req.params.id, updateData, { new: true });
-        res.json({ message: "Profile Updated", user: updatedUser });
+        const updatedUser = await User.findByIdAndUpdate(
+            userId,
+            { $set: updateData },
+            { new: true, runValidators: true }
+        ).select('-password'); // never return hashed password
+
+        if (!updatedUser) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        res.json({
+            message: 'Profile updated successfully',
+            user: {
+                id:         updatedUser._id,
+                name:       updatedUser.name       || '',
+                email:      updatedUser.email      || '',
+                phone:      updatedUser.phone      || '',
+                address:    updatedUser.address    || '',
+                city:       updatedUser.city       || '',
+                photo:      updatedUser.photo      || '',
+                employeeId: updatedUser.employeeId || '',
+                role:       updatedUser.role,
+            }
+        });
+
     } catch (err) {
-        res.status(500).json({ message: "Update Failed" });
-    
+        console.error('Profile update error:', err);
+        res.status(500).json({ message: err.message || 'Failed to update profile' });
     }
 });
 
-
-
-
-
-router.get('/sales-history', async (req, res) => {
+// ─── 6. CHANGE PASSWORD (security tab — requires current password) ────────────
+router.post('/change-password', async (req, res) => {
     try {
-        // Fetch all sales, sorted by newest first
-        const sales = await Sale.find().sort({ createdAt: -1 });
-        res.status(200).json(sales);
+        const { userId, currentPassword, newPassword } = req.body;
+
+        if (!userId || !currentPassword || !newPassword) {
+            return res.status(400).json({ message: 'All fields are required.' });
+        }
+        if (newPassword.length < 6) {
+            return res.status(400).json({ message: 'New password must be at least 6 characters.' });
+        }
+
+        const user = await User.findById(userId);
+        if (!user) return res.status(404).json({ message: 'User not found.' });
+
+        // Verify current password
+        const isMatch = await bcrypt.compare(currentPassword, user.password);
+        if (!isMatch) {
+            return res.status(400).json({ message: 'Current password is incorrect.' });
+        }
+
+        user.password = await bcrypt.hash(newPassword, 10);
+        await user.save();
+
+        console.log(`✅ Password changed for: ${user.employeeId}`);
+        res.json({ success: true, message: 'Password changed successfully.' });
+
     } catch (err) {
-        res.status(500).json({ message: "Server Error", error: err.message });
+        console.error('Change password error:', err);
+        res.status(500).json({ message: 'Server error. Please try again.' });
     }
 });
-
 
 module.exports = router;

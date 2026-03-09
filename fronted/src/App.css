@@ -40,3 +40,31 @@
 .read-the-docs {
   color: #888;
 }
+
+@media print {
+  /* Hide everything */
+  body * {
+    visibility: hidden;
+  }
+  
+  /* Show only the receipt */
+  #printable-receipt, #printable-receipt * {
+    visibility: visible;
+  }
+  
+  /* Position the receipt at the top left */
+  #printable-receipt {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    box-shadow: none; /* Remove shadows for cleaner print */
+  }
+
+  /* Hide buttons specifically */
+  .print\:hidden {
+    display: none !important;
+  }
+}

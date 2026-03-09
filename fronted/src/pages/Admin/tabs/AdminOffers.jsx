@@ -1,115 +1,223 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { FiPlus, FiTag, FiTrash2, FiAlertTriangle, FiPercent, FiX, FiCheckCircle } from 'react-icons/fi';
-
-const ToggleSwitch = ({ checked, onChange }) => (
-    <div className="flex items-center gap-3 cursor-pointer" onClick={(e) => { e.stopPropagation(); onChange(); }}>
-        <div className={`w-11 h-6 flex items-center bg-slate-700 rounded-full p-1 transition-colors ${checked ? 'bg-emerald-500' : 'bg-slate-700'}`}>
-            <div className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${checked ? 'translate-x-5' : 'translate-x-0'}`}></div>
-        </div>
-    </div>
-);
+import {
+    FiTag, FiPlus, FiTrash2, FiPercent,
+    FiScissors, FiAlertCircle, FiCalendar, FiCheckCircle
+} from 'react-icons/fi';
 
 const AdminOffers = () => {
-    const [discounts, setDiscounts] = useState([]);
-    const [showModal, setShowModal] = useState(false);
-    const [discountForm, setDiscountForm] = useState({ code: '', type: 'PERCENTAGE', value: '', minOrder: '', description: '' });
-    const [msg, setMsg] = useState({ text: '', type: '' });
+    const [offers,  setOffers]  = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [toast,   setToast]   = useState(null);
 
-    useEffect(() => { fetchDiscounts(); }, []);
+    const [newOffer, setNewOffer] = useState({
+        name: '', code: '', discountPercent: '', minOrderValue: '', validUntil: ''
+    });
 
-    const fetchDiscounts = async () => {
-        try {
-            const res = await axios.get('http://localhost:5001/api/admin/discounts');
-            setDiscounts(res.data);
-        } catch (err) { console.error(err); }
+    useEffect(() => { fetchOffers(); }, []);
+
+    const notify = (text, type = 'success') => {
+        setToast({ text, type });
+        setTimeout(() => setToast(null), 3500);
     };
 
-    const showNotification = (text, type) => { setMsg({ text, type }); setTimeout(() => setMsg({ text: '', type: '' }), 3000); };
+    const fetchOffers = async () => {
+        try {
+            const res = await axios.get('http://localhost:5001/api/offers');
+            setOffers(Array.isArray(res.data) ? res.data : []);
+        } catch (err) {
+            console.error('Fetch Error:', err);
+        } finally { setLoading(false); }
+    };
 
-    const handleCreateDiscount = async (e) => {
+    const handleCreateOffer = async (e) => {
         e.preventDefault();
-        const payload = {
-            code: discountForm.code.toUpperCase().trim(),
-            type: discountForm.type,
-            value: Number(discountForm.value),
-            minOrder: Number(discountForm.minOrder) || 0,
-            description: discountForm.description,
-            isActive: true
-        };
-
-        if (!payload.code || isNaN(payload.value) || payload.value <= 0) return showNotification("Invalid Input", "error");
-
         try {
-            await axios.post('http://localhost:5001/api/admin/create-discount', payload);
-            showNotification("Offer Created Successfully", "success");
-            setShowModal(false);
-            setDiscountForm({ code: '', type: 'PERCENTAGE', value: '', minOrder: '', description: '' });
-            fetchDiscounts();
-        } catch (e) { showNotification(e.response?.data?.message || "Failed to create", "error"); }
-    };
-
-    const toggleStatus = async (id) => {
-        try {
-            await axios.put(`http://localhost:5001/api/admin/toggle-discount/${id}`);
-            fetchDiscounts();
-        } catch(e) { showNotification("Failed to toggle", "error"); }
-    };
-
-    const deleteDiscount = async (id) => {
-        if(confirm("Delete this offer?")) {
-            try {
-                await axios.delete(`http://localhost:5001/api/admin/delete-discount/${id}`);
-                fetchDiscounts();
-            } catch(e) { showNotification("Failed to delete", "error"); }
+            await axios.post('http://localhost:5001/api/offers', {
+                name:            newOffer.name,
+                code:            newOffer.code.toUpperCase(),
+                discountPercent: Number(newOffer.discountPercent),
+                minOrderValue:   Number(newOffer.minOrderValue),
+                validUntil:      new Date(newOffer.validUntil).toISOString(),
+            });
+            notify('Coupon created successfully!');
+            setNewOffer({ name:'', code:'', discountPercent:'', minOrderValue:'', validUntil:'' });
+            fetchOffers();
+        } catch (err) {
+            notify(err.response?.data?.message || 'Connection error — is the backend running?', 'error');
         }
     };
 
-    return (
-        <div className="space-y-6 animate-fade-in">
-            {msg.text && <div className={`fixed top-6 right-6 z-50 px-6 py-4 rounded-xl font-bold text-white flex items-center gap-3 ${msg.type === 'success' ? 'bg-emerald-600' : 'bg-red-600'}`}>{msg.type === 'success' ? <FiCheckCircle/> : <FiAlertTriangle/>}{msg.text}</div>}
+    const handleDelete = async (id) => {
+        if (!window.confirm('Delete this coupon?')) return;
+        try {
+            await axios.delete(`http://localhost:5001/api/offers/${id}`);
+            notify('Coupon deleted.');
+            fetchOffers();
+        } catch { notify('Failed to delete.', 'error'); }
+    };
 
-            <div className="flex justify-between items-center">
-                <div><h3 className="text-2xl font-bold text-white">Discounts & Offers</h3><p className="text-slate-400 text-sm">Manage store coupons.</p></div>
-                <button onClick={() => setShowModal(true)} className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-3 rounded-xl font-bold shadow-lg flex items-center gap-2"><FiPlus/> Create Offer</button>
+    const getTodayString = () => new Date().toISOString().split('T')[0];
+
+    const isExpired = (validUntil) => validUntil && new Date(validUntil) < new Date();
+
+    return (
+        <div className="space-y-8 pb-10 relative">
+
+            {/* TOAST */}
+            {toast && (
+                <div className={`fixed top-5 right-5 z-[200] px-5 py-4 rounded-2xl font-bold text-white flex items-center gap-3 shadow-2xl border
+                    ${toast.type === 'success' ? 'bg-emerald-700 border-emerald-500' : 'bg-red-700 border-red-500'}`}>
+                    {toast.type === 'success' ? <FiCheckCircle size={18}/> : <FiAlertCircle size={18}/>}
+                    {toast.text}
+                </div>
+            )}
+
+            {/* ── CREATE FORM ── */}
+            <div className="bg-[#1e293b] rounded-2xl border border-slate-700 shadow-xl overflow-hidden">
+                <div className="p-6 bg-gradient-to-r from-indigo-900/50 to-slate-900 border-b border-slate-700">
+                    <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                        <FiScissors className="text-pink-500"/> Create New Coupon
+                    </h2>
+                    <p className="text-slate-400 text-sm mt-1">Define coupon code, discount % and minimum order value.</p>
+                </div>
+
+                <form onSubmit={handleCreateOffer} className="p-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+
+                    {/* Offer Name */}
+                    <div className="col-span-1 md:col-span-2 lg:col-span-3">
+                        <label className="block text-slate-400 text-xs font-black uppercase tracking-wider mb-2">Offer Name (Internal Label)</label>
+                        <input required type="text" placeholder="e.g. Holi Special 2026"
+                            className="w-full bg-[#0f172a] border border-slate-700 rounded-xl px-4 py-3 text-white focus:border-indigo-500 outline-none placeholder-slate-600 transition-all"
+                            value={newOffer.name} onChange={e=>setNewOffer({...newOffer, name:e.target.value})}/>
+                    </div>
+
+                    {/* Coupon Code */}
+                    <div>
+                        <label className="block text-slate-400 text-xs font-black uppercase tracking-wider mb-2">Coupon Code</label>
+                        <div className="relative">
+                            <FiTag className="absolute left-4 top-3.5 text-slate-500"/>
+                            <input required type="text" placeholder="HOLI20"
+                                className="w-full bg-[#0f172a] border border-slate-700 rounded-xl pl-10 pr-4 py-3 text-white font-mono uppercase focus:border-indigo-500 outline-none placeholder-slate-600 transition-all"
+                                value={newOffer.code} onChange={e=>setNewOffer({...newOffer, code:e.target.value})}/>
+                        </div>
+                    </div>
+
+                    {/* Discount % */}
+                    <div>
+                        <label className="block text-slate-400 text-xs font-black uppercase tracking-wider mb-2">Discount %</label>
+                        <div className="relative">
+                            <FiPercent className="absolute left-4 top-3.5 text-slate-500"/>
+                            <input required type="number" min="1" max="100" placeholder="20"
+                                className="w-full bg-[#0f172a] border border-slate-700 rounded-xl pl-10 pr-4 py-3 text-white focus:border-indigo-500 outline-none placeholder-slate-600 transition-all"
+                                value={newOffer.discountPercent} onChange={e=>setNewOffer({...newOffer, discountPercent:e.target.value})}/>
+                        </div>
+                    </div>
+
+                    {/* Min. Order — ₹ */}
+                    <div>
+                        <label className="block text-slate-400 text-xs font-black uppercase tracking-wider mb-2">Min. Order (₹)</label>
+                        <div className="relative">
+                            <span className="absolute left-4 top-3 text-slate-500 font-bold text-sm">₹</span>
+                            <input required type="number" min="0" placeholder="1000"
+                                className="w-full bg-[#0f172a] border border-slate-700 rounded-xl pl-9 pr-4 py-3 text-white focus:border-indigo-500 outline-none placeholder-slate-600 transition-all"
+                                value={newOffer.minOrderValue} onChange={e=>setNewOffer({...newOffer, minOrderValue:e.target.value})}/>
+                        </div>
+                    </div>
+
+                    {/* Valid Until */}
+                    <div>
+                        <label className="block text-slate-400 text-xs font-black uppercase tracking-wider mb-2">Valid Until</label>
+                        <input required type="date" min={getTodayString()} style={{colorScheme:'dark'}}
+                            className="w-full bg-[#0f172a] border border-slate-700 rounded-xl px-4 py-3 text-white focus:border-indigo-500 outline-none transition-all"
+                            value={newOffer.validUntil} onChange={e=>setNewOffer({...newOffer, validUntil:e.target.value})}
+                            onClick={e=>e.target.showPicker?.()}/>
+                    </div>
+
+                    {/* Submit */}
+                    <div className="flex items-end">
+                        <button type="submit"
+                            className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-6 rounded-xl flex items-center gap-2 justify-center transition-all shadow-lg shadow-indigo-500/20 active:scale-95">
+                            <FiPlus/> Save Coupon
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            {/* ── ACTIVE COUPONS ── */}
+            <div className="flex items-center justify-between">
+                <h3 className="text-xl font-bold text-white flex items-center gap-3 border-l-4 border-emerald-500 pl-3">
+                    Active Coupons
+                    {offers.length > 0 && (
+                        <span className="text-xs font-black bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2.5 py-1 rounded-full">
+                            {offers.filter(o => !isExpired(o.validUntil)).length} active
+                        </span>
+                    )}
+                </h3>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {discounts.map((offer) => (
-                    <div key={offer._id} className="bg-[#1e293b] p-6 rounded-2xl border border-slate-700 relative overflow-hidden">
-                        <div className="absolute top-4 right-4"><ToggleSwitch checked={offer.isActive} onChange={() => toggleStatus(offer._id)}/></div>
-                        <div className="flex items-center gap-4 mb-4">
-                            <div className="w-12 h-12 bg-slate-800 rounded-xl flex items-center justify-center text-emerald-400"><FiTag size={24}/></div>
-                            <div><h4 className="text-xl font-black text-white">{offer.code}</h4><span className="text-[10px] bg-slate-700 text-slate-300 px-2 py-1 rounded uppercase">{offer.type}</span></div>
-                        </div>
-                        <p className="text-slate-300 text-sm mb-4">{offer.description}</p>
-                        <div className="flex items-center gap-2 text-xs text-slate-500 font-mono mb-4"><FiAlertTriangle size={12}/> Min Order: ${offer.minOrder}</div>
-                        <div className="flex justify-between items-center border-t border-slate-700 pt-4">
-                            <span className="text-emerald-400 font-black text-lg">{offer.value}{offer.type === 'PERCENTAGE' ? '%' : '$'} OFF</span>
-                            <button onClick={() => deleteDiscount(offer._id)} className="text-slate-500 hover:text-red-400 transition"><FiTrash2/></button>
-                        </div>
+                {loading ? (
+                    <div className="col-span-full p-10 text-center text-slate-500">Loading coupons…</div>
+                ) : offers.length === 0 ? (
+                    <div className="col-span-full p-10 text-center text-slate-500 border border-slate-700 rounded-2xl border-dashed">
+                        <FiAlertCircle className="mx-auto text-3xl mb-3"/>
+                        <p className="font-bold">No coupons created yet.</p>
+                        <p className="text-xs mt-1">Create your first coupon above.</p>
                     </div>
-                ))}
-                {discounts.length === 0 && <div className="col-span-full py-12 text-center text-slate-500 bg-[#1e293b] rounded-2xl border border-slate-700 border-dashed"><FiPercent size={48} className="mx-auto mb-4 opacity-50"/><p>No offers found. Create one to get started.</p></div>}
-            </div>
+                ) : offers.map(offer => {
+                    const expired = isExpired(offer.validUntil);
+                    const discVal = offer.value || offer.discountPercent || 0;
+                    const minOrd  = offer.minOrder || offer.minOrderValue || 0;
+                    return (
+                        <div key={offer._id}
+                            className={`relative bg-[#1e293b] rounded-2xl border-dashed border p-6 transition-colors group
+                                ${expired ? 'border-slate-700 opacity-60' : 'border-slate-600 hover:border-indigo-500'}`}>
 
-            {showModal && (
-                <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-                    <div className="bg-[#1e293b] rounded-2xl w-full max-w-lg p-8 border border-slate-700 shadow-2xl">
-                        <div className="flex justify-between mb-6"><h3 className="text-xl font-bold text-white">Create New Offer</h3><button onClick={()=>setShowModal(false)} className="text-slate-500 hover:text-white"><FiX size={24}/></button></div>
-                        <form onSubmit={handleCreateDiscount} className="space-y-4">
-                            <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Offer Code</label><input className="w-full p-4 bg-slate-900 border border-slate-700 rounded-xl text-white outline-none uppercase" placeholder="SUMMER20" value={discountForm.code} onChange={e=>setDiscountForm({...discountForm, code: e.target.value})} required /></div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Type</label><select className="w-full p-4 bg-slate-900 border border-slate-700 rounded-xl text-white outline-none" value={discountForm.type} onChange={e=>setDiscountForm({...discountForm, type: e.target.value})}><option value="PERCENTAGE">Percentage (%)</option><option value="FLAT">Flat Amount ($)</option></select></div>
-                                <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Value</label><input type="number" className="w-full p-4 bg-slate-900 border border-slate-700 rounded-xl text-white outline-none" placeholder="20" value={discountForm.value} onChange={e=>setDiscountForm({...discountForm, value: e.target.value})} required /></div>
+                            {/* Ticket cut-outs */}
+                            <div className="absolute -left-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-[#0f172a] rounded-full"/>
+                            <div className="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-[#0f172a] rounded-full"/>
+
+                            {/* Top row */}
+                            <div className="flex justify-between items-start mb-4">
+                                <span className="bg-indigo-500/20 text-indigo-300 text-xs font-bold px-2.5 py-1 rounded-lg uppercase max-w-[70%] truncate">
+                                    {offer.description || offer.name || 'Special Offer'}
+                                </span>
+                                <button onClick={()=>handleDelete(offer._id)}
+                                    className="text-slate-500 hover:text-red-400 transition-colors p-1">
+                                    <FiTrash2 size={16}/>
+                                </button>
                             </div>
-                            <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Min Order</label><input type="number" className="w-full p-4 bg-slate-900 border border-slate-700 rounded-xl text-white outline-none" placeholder="0" value={discountForm.minOrder} onChange={e=>setDiscountForm({...discountForm, minOrder: e.target.value})} /></div>
-                            <div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Description</label><input className="w-full p-4 bg-slate-900 border border-slate-700 rounded-xl text-white outline-none" placeholder="Sale details" value={discountForm.description} onChange={e=>setDiscountForm({...discountForm, description: e.target.value})} required /></div>
-                            <button className="w-full bg-emerald-600 text-white py-4 rounded-xl font-bold mt-4 shadow-lg transition">Generate Offer</button>
-                        </form>
-                    </div>
-                </div>
-            )}
+
+                            {/* Code + discount */}
+                            <div className="text-center py-3">
+                                <h3 className="text-3xl font-black text-white tracking-widest font-mono">{offer.code}</h3>
+                                <div className="text-emerald-400 font-black text-2xl mt-1">{discVal}% OFF</div>
+                                <p className="text-xs text-slate-400 mt-2 font-medium">
+                                    On orders above <span className="text-white font-bold">₹{Number(minOrd).toLocaleString('en-IN')}</span>
+                                </p>
+                            </div>
+
+                            {/* Footer */}
+                            <div className="mt-4 pt-4 border-t border-slate-700/50 flex justify-between items-center text-xs">
+                                <span className="text-slate-400 flex items-center gap-1.5">
+                                    <FiCalendar size={11}/>
+                                    {offer.validUntil ? new Date(offer.validUntil).toLocaleDateString('en-IN', {day:'numeric',month:'short',year:'numeric'}) : 'No Expiry'}
+                                </span>
+                                {expired ? (
+                                    <span className="flex items-center gap-1 text-red-400 font-bold text-[10px]">
+                                        <span className="w-2 h-2 rounded-full bg-red-500"/> Expired
+                                    </span>
+                                ) : (
+                                    <span className="flex items-center gap-1 text-emerald-400 font-bold text-[10px]">
+                                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"/> Active
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
         </div>
     );
 };

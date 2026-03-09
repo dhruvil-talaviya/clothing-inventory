@@ -4,55 +4,65 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { User } = require('../models/Schemas');
 
-
+// ─── LOGIN ────────────────────────────────────────────────────────────────────
 router.post('/login', async (req, res) => {
-    console.log("🔹 LOGIN ATTEMPT:", req.body); // 
-
     try {
-    
-        const inputId = req.body.loginId || req.body.identifier || req.body.email || req.body.employeeId;
+        console.log("🔹 Login Request:", req.body);
+
+        const inputId   = req.body.loginId || req.body.email;
         const inputPass = req.body.password;
 
         if (!inputId || !inputPass) {
-            console.log("❌ Missing fields: Input ID or Password is empty");
-            return res.status(400).json({ message: "Missing email or password" });
+            return res.status(400).json({ message: "Please enter ID and Password" });
         }
 
-        const user = await User.findOne({ 
+        const user = await User.findOne({
             $or: [
-                { email: { $regex: new RegExp(`^${inputId}$`, 'i') } }, 
-                { employeeId: { $regex: new RegExp(`^${inputId}$`, 'i') } }
-            ] 
+                { email:      { $regex: new RegExp(`^${inputId}$`, 'i') } },
+                { employeeId: { $regex: new RegExp(`^${inputId}$`, 'i') } },
+                { username:   { $regex: new RegExp(`^${inputId}$`, 'i') } }
+            ]
         });
 
         if (!user) {
-            console.log("❌ User not found in DB");
+            console.log("❌ User not found in DB:", inputId);
             return res.status(404).json({ message: "User not found" });
         }
 
-     
+        if (user.isActive === false) {
+            console.log("🔒 Locked Account Login Attempt:", inputId);
+            return res.status(403).json({
+                message: "Your account is LOCKED. Please contact the Admin."
+            });
+        }
+
         const isMatch = await bcrypt.compare(inputPass, user.password);
         if (!isMatch) {
-            console.log("❌ Password did not match hash");
+            console.log("❌ Wrong Password for:", user.employeeId);
             return res.status(400).json({ message: "Invalid Password" });
         }
 
-      
-        console.log("✅ Login Successful for:", user.name);
+        console.log("✅ Login Success:", user.employeeId);
         const token = jwt.sign(
-            { id: user._id, role: user.role }, 
-            "secret_key", 
+            { id: user._id, role: user.role },
+            process.env.JWT_SECRET || "inventory_secret",
             { expiresIn: "1d" }
         );
 
         res.json({
+            success: true,
             token,
             user: {
-                id: user._id,
-                name: user.name,
-                email: user.email,
-                role: user.role,
-                storeId: user.employeeId
+                id:           user._id,
+                name:         user.name,
+                role:         user.role,
+                employeeId:   user.employeeId,
+                email:        user.email,
+                phone:        user.phone        || '',
+                address:      user.address      || '',
+                city:         user.city         || '',
+                photo:        user.photo        || '',
+                isFirstLogin: user.isFirstLogin
             }
         });
 
@@ -62,79 +72,53 @@ router.post('/login', async (req, res) => {
     }
 });
 
-// --- 2. First Login) ---
+// ─── FORCE CHANGE PASSWORD (first login) ─────────────────────────────────────
 router.post('/force-change-password', async (req, res) => {
     try {
         const { id, newPassword } = req.body;
-        
-        // Hash new password
-        const hashedPassword = await bcrypt.hash(newPassword, 10);
-        
-        await User.findByIdAndUpdate(id, { 
-            password: hashedPassword, 
-            isFirstLogin: false 
-        });
-        
-        res.json({ message: "Password Set Successfully" });
-    } catch (err) { 
-        res.status(500).json({ error: err.message }); 
-    }
-});
 
-// --- 3. SEND OTP (For Forgot Password) ---
-router.post('/send-otp', async (req, res) => {
-    const { employeeId, email } = req.body;
-    
-    // Generate 6-digit OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    otpStore[employeeId] = otp;
+        if (!id || !newPassword) {
+            return res.status(400).json({ message: "User ID and new password are required." });
+        }
+        if (newPassword.length < 6) {
+            return res.status(400).json({ message: "Password must be at least 6 characters." });
+        }
 
-    console.log(`[DEV MODE] OTP for ${employeeId}: ${otp}`); 
+        const user = await User.findById(id);
+        if (!user) {
+            return res.status(404).json({ message: "User not found." });
+        }
 
-    try {
-        // Try sending email
-        await transporter.sendMail({
-            from: '"StyleSync Security" <security@stylesync.com>',
-            to: email,
-            subject: 'Password Reset Code',
-            text: `Your Verification Code is: ${otp}`
-        });
-        res.json({ message: "OTP sent to email!" });
-    } catch (error) {
-        // Fallback for development if email fails
-        console.log("Email failed (using console log instead):", error.message);
-        res.json({ message: `OTP Generated (Check Server Console): ${otp}` }); 
-    }
-});
-
-// --- 4. RESET PASSWORD (Verify OTP) ---
-router.post('/reset-password', async (req, res) => {
-    const { employeeId, otp, newPassword } = req.body;
-
-    // Verify OTP
-    if (!otpStore[employeeId] || otpStore[employeeId] !== otp) {
-        return res.status(400).json({ message: "Invalid or Expired OTP" });
-    }
-
-    try {
-        const user = await User.findOne({ employeeId });
-        if (!user) return res.status(404).json({ message: "User not found" });
-
-        // Update Password
-        const hashedPassword = await bcrypt.hash(newPassword, 10);
-        user.password = hashedPassword;
+        user.password     = await bcrypt.hash(newPassword, 10);
+        user.isFirstLogin = false;
         await user.save();
 
-        // Clear OTP after success
-        delete otpStore[employeeId]; 
-        
-        res.json({ message: "Password Updated! Please Login again." });
+        // Re-fetch to confirm it actually saved
+        const saved = await User.findById(id);
+        console.log(`✅ Password changed for: ${user.employeeId} — isFirstLogin is now → ${saved.isFirstLogin}`);
+
+        res.json({
+            success: true,
+            message: "Password updated successfully.",
+            user: {
+                id:           saved._id,
+                name:         saved.name,
+                role:         saved.role,
+                employeeId:   saved.employeeId,
+                email:        saved.email,
+                phone:        saved.phone     || '',
+                address:      saved.address   || '',
+                city:         saved.city      || '',
+                photo:        saved.photo     || '',
+                isFirstLogin: saved.isFirstLogin
+            }
+        });
+
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error("🔥 Force-change-password error:", err);
+        res.status(500).json({ message: "Server error. Please try again." });
     }
 });
 
-
-
-// --- SINGLE EXPORT AT THE END ---
+// ✅ THIS WAS MISSING — caused "Router.use() requires a middleware function" error
 module.exports = router;

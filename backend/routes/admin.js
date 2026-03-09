@@ -1,134 +1,207 @@
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
+const { User, Product, Sale } = require('../models/Schemas');
+const Discount = require('../models/discount');
+const Event = require('../models/Event');
 
-// ---------------------------------------------------
-// 1. IMPORTS (Ensure these match your file structure)
-// ---------------------------------------------------
-const { User, Product, Sale } = require('../models/Schemas'); // Or require('../models/User'), etc.
-const Discount = require('../models/Discount'); 
-
-// ---------------------------------------------------
-// 2. ADMIN DASHBOARD STATS (The "Crash-Proof" Version)
-// ---------------------------------------------------
-// --- ADMIN STATS ROUTE ---
-// --- ADMIN STATS ROUTE ---
+// ===============================
+// 1️⃣ DASHBOARD STATS
+// ===============================
 router.get('/stats', async (req, res) => {
     try {
-        // 1. Fetch ALL sales (Newest first)
-        const sales = await Sale.find().sort({ date: -1 });
-        const products = await Product.find();
+        const totalRevenueAgg = await Sale.aggregate([
+            {
+                $group: {
+                    _id: null,
+                    total: { $sum: { $ifNull: ["$totalAmount", 0] } }
+                }
+            }
+        ]);
 
-        // 2. Calculate Totals
-        const now = new Date();
-        const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const startMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-        const startYear = new Date(now.getFullYear(), 0, 1);
+        const totalRevenue = totalRevenueAgg.length > 0 ? totalRevenueAgg[0].total : 0;
+        const salesCount = await Sale.countDocuments();
+        const productsCount = await Product.countDocuments();
 
-        let today = 0, month = 0, year = 0, total = 0;
+        const chartData = await Sale.aggregate([
+            {
+                $group: {
+                    _id: {
+                        $dateToString: {
+                            format: "%Y-%m-%d",
+                            date: { $ifNull: ["$date", "$createdAt"] }
+                        }
+                    },
+                    revenue: { $sum: { $ifNull: ["$totalAmount", 0] } },
+                    sales: { $sum: 1 }
+                }
+            },
+            { $sort: { _id: -1 } },
+            { $limit: 10 }
+        ]);
 
-        sales.forEach(s => {
-            const amount = s.totalAmount || 0;
-            const d = new Date(s.date || s.createdAt);
-            
-            total += amount;
-            if (d >= startToday) today += amount;
-            if (d >= startMonth) month += amount;
-            if (d >= startYear) year += amount;
-        });
-
-        // 3. Prepare Charts
-        const last7Days = [...Array(7)].map((_, i) => {
-            const d = new Date();
-            d.setDate(d.getDate() - i);
-            return d.toISOString().split('T')[0];
-        }).reverse();
-
-        const chartData = last7Days.map(dateStr => {
-            return sales
-                .filter(s => new Date(s.date || s.createdAt).toISOString().split('T')[0] === dateStr)
-                .reduce((acc, curr) => acc + (curr.totalAmount || 0), 0);
-        });
-
-        const categoryMap = {};
-        products.forEach(p => {
-            const cat = p.category || "Other";
-            categoryMap[cat] = (categoryMap[cat] || 0) + 1;
-        });
-
-        // 4. SEND RESPONSE (CRITICAL PART)
-        // Ensure 'allSales' is included here!
-      // ... inside the router.get('/stats', ...) function
-
-        // 4. SEND RESPONSE
         res.json({
-            today, 
-            month, 
-            year, 
-            total,
-            chart: { labels: last7Days, data: chartData },
-            pie: { labels: Object.keys(categoryMap), data: Object.values(categoryMap) },
-            recentActivity: sales.slice(0, 5),
-            allSales: sales // <--- THIS LINE IS CRITICAL. MUST BE HERE.
+            revenue: totalRevenue,
+            salesCount,
+            productsCount,
+            chartData: chartData.reverse().map(d => ({
+                date: d._id,
+                revenue: d.revenue,
+                sales: d.sales
+            }))
         });
 
     } catch (err) {
-        console.error("Stats Error:", err);
+        console.error("Dashboard Stats Error:", err);
+        res.status(500).json({ message: "Error loading dashboard stats" });
+    }
+});
+
+// ===============================
+// 2️⃣ SALES HISTORY
+// ===============================
+router.get('/sales-history', async (req, res) => {
+    try {
+        const sales = await Sale.find()
+            .populate('soldBy', 'name employeeId')
+            .sort({ date: -1, createdAt: -1 });
+
+        const formattedSales = sales.map(sale => ({
+            _id: sale._id,
+            invoiceId: sale.invoiceId,
+            date: sale.date || sale.createdAt,
+            staffId:   sale.staffId   || sale.soldBy?.employeeId || "N/A",
+            staffName: sale.staffName || sale.soldBy?.name       || "N/A",
+            customerName:  sale.customerName  || "Walk-in",
+            customerPhone: sale.customerPhone || "--",
+            items:    sale.items    || [],
+            subtotal: sale.subtotal || 0,
+            discount: sale.discount || 0,
+            totalAmount:  sale.totalAmount  || 0,
+            couponApplied: sale.discount > 0
+        }));
+
+        res.json(formattedSales);
+
+    } catch (err) {
+        console.error("Sales History Error:", err);
+        res.status(500).json({ message: "Failed to load sales history" });
+    }
+});
+
+// ===============================
+// 3️⃣ STAFF MANAGEMENT
+// ===============================
+router.get('/staff', async (req, res) => {
+    try {
+        const staff = await User.find({ role: 'staff' })
+            .select('-password')
+            .sort({ createdAt: -1 });
+        res.json(staff);
+    } catch (err) {
+        res.status(500).json({ message: "Error fetching staff list" });
+    }
+});
+
+router.post('/add-staff', async (req, res) => {
+    try {
+        const { name, username, employeeId, email, password } = req.body;
+        const finalName = name || username;
+
+        if (!finalName || !employeeId || !email || !password) {
+            return res.status(400).json({ message: "All fields are required" });
+        }
+
+        const existingUser = await User.findOne({ $or: [{ employeeId }, { email }] });
+        if (existingUser) {
+            return res.status(400).json({ message: "Employee ID or Email already exists" });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        const newStaff = new User({
+            name: finalName,
+            employeeId,
+            email,
+            password: hashedPassword,
+            role: 'staff',
+            isActive: true,
+            isFirstLogin: true
+        });
+
+        await newStaff.save();
+        res.status(201).json({ message: "Staff Account Created Successfully" });
+
+    } catch (err) {
+        console.error("Create Staff Error:", err);
+        res.status(500).json({ message: "Internal Server Error" });
+    }
+});
+
+router.put('/staff-status/:id', async (req, res) => {
+    try {
+        const user = await User.findById(req.params.id);
+        if (!user) return res.status(404).json({ message: "User not found" });
+
+        user.isActive = !user.isActive;
+        await user.save();
+
+        res.json({ message: "Status updated", isActive: user.isActive });
+    } catch (err) {
+        console.error("Toggle Status Error:", err);
         res.status(500).json({ message: "Server Error" });
     }
 });
 
-// ---------------------------------------------------
-// 3. STAFF MANAGEMENT
-// ---------------------------------------------------
-router.get('/staff', async (req, res) => { 
-    try { 
-        const staff = await User.find({ role: 'staff' }).select('-password'); 
-        res.json(staff); 
-    } catch (err) { res.status(500).json({ error: err.message }); } 
+router.delete('/delete-staff/:id', async (req, res) => {
+    try {
+        const deletedUser = await User.findByIdAndDelete(req.params.id);
+        if (!deletedUser) return res.status(404).json({ message: "User not found" });
+
+        res.json({ message: "Staff account permanently deleted." });
+    } catch (err) {
+        console.error("Delete Staff Error:", err);
+        res.status(500).json({ message: "Server Error" });
+    }
 });
 
-router.post('/create-staff', async (req, res) => { 
-    try { 
-        const { name, employeeId, email, password } = req.body; 
-        if(await User.findOne({ employeeId })) return res.status(400).json({ message: "ID Taken" }); 
-        
-        const hashedPassword = await bcrypt.hash(password, 10); 
-        const newStaff = new User({ 
-            name, employeeId, email, 
-            password: hashedPassword, 
-            role: 'staff', isActive: true, isFirstLogin: true 
-        });
-        
-        await newStaff.save(); 
-        res.json({ message: "Staff Created" }); 
-    } catch (err) { res.status(500).json({ error: err.message }); } 
+// ===============================
+// 4️⃣ INVENTORY & DISCOUNTS
+// ===============================
+router.get('/products', async (req, res) => {
+    try {
+        const products = await Product.find().sort({ createdAt: -1 });
+        res.json(products);
+    } catch (err) {
+        res.status(500).json({ message: "Server Error" });
+    }
 });
 
-router.put('/toggle-status/:id', async (req, res) => { 
-    try { 
-        const user = await User.findById(req.params.id); 
-        user.isActive = !user.isActive; 
-        await user.save(); 
-        res.json({ message: "Status Updated" }); 
-    } catch (err) { res.status(500).json({ error: err.message }); } 
+router.post('/add-product', async (req, res) => {
+    try {
+        const newProduct = new Product(req.body);
+        await newProduct.save();
+        res.json({ message: "Product Added", product: newProduct });
+    } catch (err) {
+        console.error("Add Product Error:", err);
+        res.status(500).json({ message: "Error adding product" });
+    }
 });
 
-router.delete('/delete-staff/:id', async (req, res) => { 
-    try { 
-        await User.findByIdAndDelete(req.params.id); 
-        res.json({ message: "Deleted" }); 
-    } catch(e){ res.status(500).json({ message: "Error deleting staff" }); } 
-});
-
-// ---------------------------------------------------
-// 4. PRODUCT MANAGEMENT
-// ---------------------------------------------------
-router.post('/add-product', async (req, res) => { 
-    try { 
-        await new Product(req.body).save(); 
-        res.json({ message: "Added" }); 
-    } catch(e){ res.status(500).json({ message: "Error adding product" }); } 
+router.put('/edit-product/:id', async (req, res) => {
+    try {
+        const { name, sku, category, costPrice, price, stock } = req.body;
+        const updatedProduct = await Product.findByIdAndUpdate(
+            req.params.id,
+            { name, sku, category, costPrice, price, stock },
+            { new: true }
+        );
+        if (!updatedProduct) return res.status(404).json({ message: "Product not found" });
+        res.json({ message: "Product updated successfully", product: updatedProduct });
+    } catch (err) {
+        console.error("Edit Product Error:", err);
+        res.status(500).json({ message: "Server Error" });
+    }
 });
 
 router.put('/product-status/:id', async (req, res) => {
@@ -136,74 +209,147 @@ router.put('/product-status/:id', async (req, res) => {
         const product = await Product.findById(req.params.id);
         if (!product) return res.status(404).json({ message: "Product not found" });
 
-        product.isAvailable = !product.isAvailable; 
+        product.isAvailable = product.isAvailable === false ? true : false;
         await product.save();
-        res.json({ message: "Status Updated", product });
-    } catch (err) { res.status(500).json({ message: "Server Error" }); }
+
+        res.json({ message: "Visibility updated", isAvailable: product.isAvailable });
+    } catch (err) {
+        console.error("Product Status Error:", err);
+        res.status(500).json({ message: "Server Error" });
+    }
 });
 
-router.put('/update-stock/:id', async (req, res) => {
+router.delete('/delete-product/:id', async (req, res) => {
     try {
-        const { newStock } = req.body;
-        await Product.findByIdAndUpdate(req.params.id, { stock: newStock });
-        res.json({ message: "Stock Updated Successfully" });
-    } catch (err) { res.status(500).json({ error: err.message }); }
+        const deletedProduct = await Product.findByIdAndDelete(req.params.id);
+        if (!deletedProduct) return res.status(404).json({ message: "Product not found" });
+        res.json({ message: "Product deleted successfully" });
+    } catch (err) {
+        console.error("Delete Product Error:", err);
+        res.status(500).json({ message: "Server Error" });
+    }
 });
 
-// ---------------------------------------------------
-// 5. DISCOUNT MANAGEMENT
-// ---------------------------------------------------
 router.get('/discounts', async (req, res) => {
     try {
         const discounts = await Discount.find().sort({ createdAt: -1 });
         res.json(discounts);
-    } catch (err) { res.status(500).json({ message: "Server Error", error: err.message }); }
-});
-
-router.post('/create-discount', async (req, res) => {
-    try {
-        const { code, type, value, minOrder, description } = req.body;
-        
-        const existing = await Discount.findOne({ code });
-        if (existing) return res.status(400).json({ message: `Code '${code}' exists.` });
-
-        const newDiscount = new Discount({ code, type, value, minOrder, description, isActive: true });
-        await newDiscount.save();
-        
-        res.status(201).json({ message: "Discount Created", discount: newDiscount });
-    } catch (err) { res.status(500).json({ message: err.message }); }
-});
-
-router.put('/toggle-discount/:id', async (req, res) => {
-    try {
-        const discount = await Discount.findById(req.params.id);
-        if (!discount) return res.status(404).json({ message: "Not found" });
-        discount.isActive = !discount.isActive;
-        await discount.save();
-        res.json({ message: "Status Toggled", discount });
-    } catch (err) { res.status(500).json({ message: "Server Error" }); }
-});
-
-router.delete('/delete-discount/:id', async (req, res) => {
-    try {
-        await Discount.findByIdAndDelete(req.params.id);
-        res.json({ message: "Discount deleted" });
-    } catch (err) { res.status(500).json({ message: "Server Error" }); }
-});
-
-// ---------------------------------------------------
-// 6. EXPORT / MISC
-// ---------------------------------------------------
-router.get('/export-sales', async (req, res) => { 
-    try {
-        const sales = await Sale.find().sort({date:-1}); 
-        let csv="ID,Date,Customer,Staff,Amount\n"; 
-        sales.forEach(s=> csv+=`${s._id},${s.date},${s.customerName},${s.soldBy},${s.totalAmount}\n`); 
-        res.header('Content-Type', 'text/csv');
-        res.attachment('sales.csv'); 
-        res.send(csv); 
     } catch (err) {
-        res.status(500).json({ message: "Export Failed" });
+        res.status(500).json({ message: "Server Error" });
+    }
+});
+
+// ===============================
+// 5️⃣ EVENTS MANAGEMENT
+// ===============================
+
+// Helper: compute live status from startDate + endDate (never stored)
+const computeEventStatus = (event) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const start = event.startDate ? new Date(event.startDate) : (event.date ? new Date(event.date) : null);
+    const end   = event.endDate   ? new Date(event.endDate)   : start;
+
+    if (!start) return 'Upcoming';
+
+    const startDay = new Date(start); startDay.setHours(0, 0, 0, 0);
+    const endDay   = new Date(end);   endDay.setHours(0, 0, 0, 0);
+
+    if (today < startDay) return 'Upcoming';
+    if (today > endDay)   return 'Completed';
+    return 'Active';
+};
+
+// Format event for response — always attaches computed live status
+const formatEvent = (event) => {
+    const obj = event.toObject ? event.toObject() : { ...event };
+    obj.status = computeEventStatus(obj);   // ✅ always live, never stale
+    return obj;
+};
+
+// GET all events — sorted by startDate ascending (upcoming first)
+router.get('/events', async (req, res) => {
+    try {
+        const events = await Event.find().sort({ startDate: 1, date: 1 });
+        res.json(events.map(formatEvent));
+    } catch (err) {
+        res.status(500).json({ message: "Failed to load events" });
+    }
+});
+
+// POST create event — only saves startDate, endDate, and content fields
+router.post('/events', async (req, res) => {
+    try {
+        const { title, startDate, endDate, location, description, saleOffer } = req.body;
+
+        if (!title || !startDate || !endDate) {
+            return res.status(400).json({ message: "Title, start date and end date are required" });
+        }
+
+        if (new Date(endDate) < new Date(startDate)) {
+            return res.status(400).json({ message: "End date cannot be before start date" });
+        }
+
+        const newEvent = new Event({
+            title,
+            startDate: new Date(startDate),
+            endDate:   new Date(endDate),
+            // Keep legacy date field = startDate for backward compat
+            date:      new Date(startDate),
+            location:  location || 'In-Store',
+            description,
+            saleOffer:  saleOffer || '',
+        });
+
+        await newEvent.save();
+        res.status(201).json(formatEvent(newEvent));
+    } catch (err) {
+        console.error("Create Event Error:", err);
+        res.status(500).json({ message: "Failed to create event" });
+    }
+});
+
+// PUT update event
+router.put('/events/:id', async (req, res) => {
+    try {
+        const { title, startDate, endDate, location, description, saleOffer } = req.body;
+
+        if (startDate && endDate && new Date(endDate) < new Date(startDate)) {
+            return res.status(400).json({ message: "End date cannot be before start date" });
+        }
+
+        const updatePayload = {
+            ...(title       && { title }),
+            ...(startDate   && { startDate: new Date(startDate), date: new Date(startDate) }),
+            ...(endDate     && { endDate:   new Date(endDate) }),
+            ...(location    && { location }),
+            ...(description !== undefined && { description }),
+            ...(saleOffer   !== undefined && { saleOffer }),
+        };
+
+        const updated = await Event.findByIdAndUpdate(
+            req.params.id,
+            updatePayload,
+            { new: true }
+        );
+
+        if (!updated) return res.status(404).json({ message: "Event not found" });
+        res.json(formatEvent(updated));
+    } catch (err) {
+        console.error("Update Event Error:", err);
+        res.status(500).json({ message: "Failed to update event" });
+    }
+});
+
+// DELETE event
+router.delete('/events/:id', async (req, res) => {
+    try {
+        const deleted = await Event.findByIdAndDelete(req.params.id);
+        if (!deleted) return res.status(404).json({ message: "Event not found" });
+        res.json({ message: "Event deleted successfully" });
+    } catch (err) {
+        res.status(500).json({ message: "Failed to delete event" });
     }
 });
 
