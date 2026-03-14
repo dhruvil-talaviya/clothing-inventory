@@ -1,11 +1,18 @@
 const express  = require('express');
 const router   = express.Router();
-const mongoose = require('mongoose');
 const bcrypt   = require('bcryptjs');
 const multer   = require('multer');
 const path     = require('path');
 const fs       = require('fs');
 const { Product, Sale, User } = require('../models/Schemas');
+const { sendBillEmail } = require('../utils/sendBillEmail');
+const Razorpay = require('razorpay');
+const crypto   = require('crypto');
+
+const razorpay = new Razorpay({
+    key_id:     process.env.RAZORPAY_KEY_ID,
+    key_secret: process.env.RAZORPAY_KEY_SECRET,
+});
 
 // ─── MULTER SETUP (profile photo uploads) ────────────────────────────────────
 const uploadsDir = path.join(__dirname, '../uploads');
@@ -21,7 +28,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
     storage,
-    limits: { fileSize: 3 * 1024 * 1024 }, // 3MB
+    limits: { fileSize: 3 * 1024 * 1024 },
     fileFilter: (req, file, cb) => {
         const allowed = /jpeg|jpg|png|webp/;
         const validExt  = allowed.test(path.extname(file.originalname).toLowerCase());
@@ -34,10 +41,16 @@ const upload = multer({
 // ─── 1. GET ALL PRODUCTS ──────────────────────────────────────────────────────
 router.get('/products', async (req, res) => {
     try {
-        const products = await Product.find({ isAvailable: true, stock: { $gt: 0 } });
+        const products = await Product.find({
+            isAvailable: true,
+            $or: [
+                { stock: { $gt: 0 } },
+                { 'variants.stock': { $gt: 0 } }
+            ]
+        });
         res.json(products);
     } catch (err) {
-        res.status(500).json({ message: "Error fetching products" });
+        res.status(500).json({ message: 'Error fetching products' });
     }
 });
 
@@ -49,51 +62,111 @@ router.post('/create-sale', async (req, res) => {
             soldBy,
             staffId,
             staffName,
-            customerName, customerPhone, customerAddress, storeLocation,
-            subtotal, discount, totalAmount
-        } = req.body;
-
-        if (!soldBy || !items || items.length === 0) {
-            return res.status(400).json({ message: "Invalid sale data. Check items and staff ID." });
-        }
-
-        // Check stock availability BEFORE processing
-        for (const item of items) {
-            const product = await Product.findById(item.productId);
-            if (!product || product.stock < item.quantity) {
-                return res.status(400).json({ message: `Insufficient stock for ${item.name}` });
-            }
-        }
-
-        // Deduct stock
-        for (const item of items) {
-            await Product.findByIdAndUpdate(item.productId, {
-                $inc: { stock: -item.quantity }
-            });
-        }
-
-        const newSale = new Sale({
-            invoiceId:       `INV-${Date.now().toString().slice(-6).toUpperCase()}`,
-            items,
-            soldBy:          soldBy.toString(),
-            staffId:         staffId   || 'N/A',
-            staffName:       staffName || 'Staff',
-            customerName:    customerName || 'Walk-in Customer',
+            customerName,
             customerPhone,
+            customerEmail,
             customerAddress,
             storeLocation,
             subtotal,
             discount,
             totalAmount,
-            date: new Date()
+            paymentMethod,
+        } = req.body;
+
+        if (!soldBy || !items || items.length === 0) {
+            return res.status(400).json({ message: 'Invalid sale data. Check items and staff ID.' });
+        }
+
+        // ── Check stock availability BEFORE deducting ──────────────────────
+        for (const item of items) {
+            const product = await Product.findById(item.productId);
+            if (!product) {
+                return res.status(400).json({ message: `Product not found: ${item.name}` });
+            }
+
+            const hasVariants = product.variants && product.variants.length > 0;
+
+            if (hasVariants && item.size && item.size !== 'OS') {
+                const variant = product.variants.find(v => v.size === item.size);
+                if (!variant || variant.stock < item.quantity) {
+                    return res.status(400).json({
+                        message: `Insufficient stock for ${item.name} (Size: ${item.size})`
+                    });
+                }
+            } else {
+                if (product.stock < item.quantity) {
+                    return res.status(400).json({ message: `Insufficient stock for ${item.name}` });
+                }
+            }
+        }
+
+        // ── Deduct stock (variant-aware) ───────────────────────────────────
+        for (const item of items) {
+            const product     = await Product.findById(item.productId);
+            const hasVariants = product.variants && product.variants.length > 0;
+
+            if (hasVariants && item.size && item.size !== 'OS') {
+                await Product.findOneAndUpdate(
+                    { _id: item.productId, 'variants.size': item.size },
+                    { $inc: { 'variants.$.stock': -item.quantity } }
+                );
+            } else {
+                await Product.findByIdAndUpdate(item.productId, {
+                    $inc: { stock: -item.quantity }
+                });
+            }
+        }
+
+        // ── Save sale record ───────────────────────────────────────────────
+        const newSale = new Sale({
+            invoiceId:      `INV-${Date.now().toString().slice(-6).toUpperCase()}`,
+            items,
+            soldBy:         soldBy.toString(),
+            staffId:        staffId      || 'N/A',
+            staffName:      staffName    || 'Staff',
+            customerName:   customerName || 'Walk-in Customer',
+            customerPhone,
+            customerEmail,
+            customerAddress,
+            storeLocation,
+            subtotal,
+            discount,
+            totalAmount,
+            paymentMethod,
+            date: new Date(),
         });
 
         await newSale.save();
-        res.status(201).json({ message: "Sale successful", sale: newSale });
+
+        // ── Email invoice (non-blocking — won't fail the checkout) ─────────
+        if (customerEmail && customerEmail.includes('@')) {
+            sendBillEmail(newSale.toObject(), customerEmail)
+                .catch(err => console.error('📧 Email failed (sale still saved):', err.message));
+        }
+
+        res.status(201).json({ message: 'Sale successful', sale: newSale });
 
     } catch (err) {
-        console.error("Sale Transaction Error:", err);
-        res.status(500).json({ message: "Checkout Failed: " + err.message });
+        console.error('Sale Transaction Error:', err);
+        res.status(500).json({ message: 'Checkout Failed: ' + err.message });
+    }
+});
+
+// ─── 2b. MANUAL SEND INVOICE EMAIL ───────────────────────────────────────────
+router.post('/send-invoice-email', async (req, res) => {
+    try {
+        const { saleId, email } = req.body;
+        if (!email || !email.includes('@')) {
+            return res.status(400).json({ message: 'Invalid email address.' });
+        }
+        const sale = await Sale.findById(saleId);
+        if (!sale) return res.status(404).json({ message: 'Sale not found.' });
+
+        await sendBillEmail(sale.toObject(), email);
+        res.json({ message: 'Invoice emailed successfully.' });
+    } catch (err) {
+        console.error('Manual email error:', err.message);
+        res.status(500).json({ message: 'Failed to send email: ' + err.message });
     }
 });
 
@@ -102,7 +175,7 @@ router.get('/daily-stats/:staffId', async (req, res) => {
     try {
         const { staffId } = req.params;
         const start = new Date(); start.setHours(0,  0,  0,   0);
-        const end   = new Date(); end.setHours(23,  59, 59, 999);
+        const end   = new Date(); end.setHours(23, 59, 59, 999);
 
         const todaySales = await Sale.find({
             $or: [{ soldBy: staffId }, { staffId: staffId }],
@@ -135,7 +208,6 @@ router.put('/profile/:id', upload.single('photo'), async (req, res) => {
         const { name, phone, address, email, city } = req.body;
         const userId = req.params.id;
 
-        // Build update object — only include fields that were actually sent
         const updateData = {};
         if (name    !== undefined) updateData.name    = name.trim();
         if (phone   !== undefined) updateData.phone   = phone.trim();
@@ -143,7 +215,6 @@ router.put('/profile/:id', upload.single('photo'), async (req, res) => {
         if (email   !== undefined) updateData.email   = email.trim();
         if (city    !== undefined) updateData.city    = city.trim();
 
-        // If a new photo was uploaded, save its public URL
         if (req.file) {
             updateData.photo = `http://localhost:5001/uploads/${req.file.filename}`;
         }
@@ -152,7 +223,7 @@ router.put('/profile/:id', upload.single('photo'), async (req, res) => {
             userId,
             { $set: updateData },
             { new: true, runValidators: true }
-        ).select('-password'); // never return hashed password
+        ).select('-password');
 
         if (!updatedUser) {
             return res.status(404).json({ message: 'User not found' });
@@ -179,7 +250,7 @@ router.put('/profile/:id', upload.single('photo'), async (req, res) => {
     }
 });
 
-// ─── 6. CHANGE PASSWORD (security tab — requires current password) ────────────
+// ─── 6. CHANGE PASSWORD ───────────────────────────────────────────────────────
 router.post('/change-password', async (req, res) => {
     try {
         const { userId, currentPassword, newPassword } = req.body;
@@ -194,7 +265,6 @@ router.post('/change-password', async (req, res) => {
         const user = await User.findById(userId);
         if (!user) return res.status(404).json({ message: 'User not found.' });
 
-        // Verify current password
         const isMatch = await bcrypt.compare(currentPassword, user.password);
         if (!isMatch) {
             return res.status(400).json({ message: 'Current password is incorrect.' });
@@ -209,6 +279,41 @@ router.post('/change-password', async (req, res) => {
     } catch (err) {
         console.error('Change password error:', err);
         res.status(500).json({ message: 'Server error. Please try again.' });
+    }
+});
+
+// ─── 7. CREATE RAZORPAY ORDER ─────────────────────────────────────────────────
+router.post('/create-razorpay-order', async (req, res) => {
+    try {
+        const { amount, currency = 'INR', receipt } = req.body;
+        if (!amount || amount < 100) {
+            return res.status(400).json({ message: 'Invalid amount. Minimum is Rs.1.' });
+        }
+        const order = await razorpay.orders.create({ amount, currency, receipt });
+        res.json(order);
+    } catch (err) {
+        console.error('Razorpay order error:', err);
+        res.status(500).json({ message: 'Could not create payment order: ' + err.message });
+    }
+});
+
+// ─── 8. VERIFY RAZORPAY PAYMENT ───────────────────────────────────────────────
+router.post('/verify-razorpay-payment', (req, res) => {
+    try {
+        const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+        const body      = razorpay_order_id + '|' + razorpay_payment_id;
+        const expected  = crypto
+            .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+            .update(body)
+            .digest('hex');
+
+        if (expected !== razorpay_signature) {
+            return res.status(400).json({ message: 'Payment verification failed. Invalid signature.' });
+        }
+        res.json({ verified: true, message: 'Payment verified successfully.' });
+    } catch (err) {
+        console.error('Razorpay verify error:', err);
+        res.status(500).json({ message: 'Verification error: ' + err.message });
     }
 });
 

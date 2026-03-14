@@ -101,7 +101,7 @@ const AdminDashboard = () => {
                                 ></div>
                                 <div className="absolute right-0 top-16 w-64 bg-[#1e293b] border border-slate-700 rounded-xl shadow-2xl py-2 z-50 animate-fade-in-up">
                                     <div className="px-4 py-3 border-b border-slate-700 mb-2">
-                                        <p className="text-white font-bold text-sm">Signed in as</p>
+                                        <p className="text-white font-bold text-sm">Admin Account</p>
                                         <p className="text-slate-400 text-xs truncate">{user.email || 'admin@system.com'}</p>
                                     </div>
                                     <button 

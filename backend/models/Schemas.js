@@ -11,34 +11,67 @@ const userSchema = new mongoose.Schema({
     isActive:     { type: Boolean, default: true },
     phone:        { type: String },
     address:      { type: String },
-    city:         { type: String },   // ← ADDED: for staff profile city
-    photo:        { type: String },   // ← ADDED: profile photo URL or base64
+    city:         { type: String },
+    photo:        { type: String },
     isFirstLogin: { type: Boolean, default: true },
     createdAt:    { type: Date, default: Date.now }
 });
 
 // --- 2. PRODUCT SCHEMA ---
+const variantSchema = new mongoose.Schema({
+    size:  { type: String, required: true },   // 'XS' | 'S' | 'M' | 'L' | 'XL' | 'XXL'
+    sku:   { type: String },
+    stock: { type: Number, default: 0 },
+}, { _id: false });
+
 const productSchema = new mongoose.Schema({
     name:        { type: String, required: true },
     category:    { type: String, required: true },
     price:       { type: Number, required: true },
-    stock:       { type: Number, required: true },
+    costPrice:   { type: Number, default: 0 },
+    color:       { type: String },
+    description: { type: String },
+
+    // ── Flat stock (used when no variants, e.g. watches/accessories) ──
+    stock:       { type: Number, default: 0 },
+    sku:         { type: String },
+
+    // ── Size variants (shirts, jeans, etc.) ──
+    variants:    { type: [variantSchema], default: [] },
+
+    // ── Computed total — always kept in sync on save ──
+    totalStock:  { type: Number, default: 0 },
+
     image:       { type: String },
     isAvailable: { type: Boolean, default: true },
     createdAt:   { type: Date, default: Date.now }
 });
 
+// Auto-sync totalStock before every save
+productSchema.pre('save', function (next) {
+    if (this.variants && this.variants.length > 0) {
+        this.totalStock = this.variants.reduce((sum, v) => sum + (v.stock || 0), 0);
+        this.stock      = this.totalStock; // keep flat field in sync too
+    } else {
+        this.totalStock = this.stock || 0;
+    }
+    next();
+});
+
 // --- 3. SALE SCHEMA ---
+const saleItemSchema = new mongoose.Schema({
+    productId: { type: String },
+    name:      { type: String },
+    price:     { type: Number },
+    quantity:  { type: Number },
+    size:      { type: String, default: 'OS' },  // ← size selected at billing
+    sku:       { type: String },                  // ← variant SKU scanned/used
+}, { _id: false });
+
 const saleSchema = new mongoose.Schema({
     invoiceId: { type: String },
-    items: [
-        {
-            productId: { type: String },
-            name:      { type: String },
-            price:     { type: Number },
-            quantity:  { type: Number }
-        }
-    ],
+
+    items: { type: [saleItemSchema], default: [] },
 
     // Money
     subtotal:    { type: Number, default: 0 },
@@ -51,13 +84,23 @@ const saleSchema = new mongoose.Schema({
     customerAddress: { type: String },
     storeLocation:   { type: String },
 
-    // Staff — all three fields needed for admin dashboard
-    soldBy:    { type: String },  // MongoDB _id (used for .populate() & history queries)
-    staffId:   { type: String },  // employeeId e.g. "Staff05", "STAFF01"
-    staffName: { type: String },  // display name e.g. "Meet", "Rahul Staff"
+    // Staff
+    soldBy:    { type: String },
+    staffId:   { type: String },
+    staffName: { type: String },
 
     // Time
     date: { type: Date, default: Date.now }
+});
+
+// Auto-generate invoiceId if not provided
+saleSchema.pre('save', function (next) {
+    if (!this.invoiceId) {
+        const stamp = Date.now().toString(36).toUpperCase();
+        const rand  = Math.random().toString(36).substring(2, 5).toUpperCase();
+        this.invoiceId = `INV-${stamp}-${rand}`;
+    }
+    next();
 });
 
 // --- 4. EXPORT ---

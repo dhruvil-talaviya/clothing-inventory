@@ -27,7 +27,7 @@ const seedAdmin = async () => {
         });
 
         await adminUser.save();
-        console.log("🚀 Admin Created Successfully!");
+        console.log("Admin Created Successfully!");
         
         // 4. Exit
         process.exit();

@@ -36,7 +36,7 @@ const Login = () => {
 
         try {
             const res = await axios.post('http://localhost:5001/api/auth/login', credentials);
-            console.log("✅ Server Response:", res.data); // DEBUG LOG
+            console.log(" Server Response:", res.data); // DEBUG LOG
 
             const { user, token } = res.data;
 

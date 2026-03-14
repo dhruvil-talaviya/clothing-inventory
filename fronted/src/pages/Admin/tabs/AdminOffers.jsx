@@ -2,13 +2,14 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import {
     FiTag, FiPlus, FiTrash2, FiPercent,
-    FiScissors, FiAlertCircle, FiCalendar, FiCheckCircle
+    FiScissors, FiAlertCircle, FiCalendar, FiCheckCircle, FiX
 } from 'react-icons/fi';
 
 const AdminOffers = () => {
     const [offers,  setOffers]  = useState([]);
     const [loading, setLoading] = useState(true);
     const [toast,   setToast]   = useState(null);
+    const [confirmDeleteId, setConfirmDeleteId] = useState(null); // ← NEW
 
     const [newOffer, setNewOffer] = useState({
         name: '', code: '', discountPercent: '', minOrderValue: '', validUntil: ''
@@ -49,16 +50,15 @@ const AdminOffers = () => {
     };
 
     const handleDelete = async (id) => {
-        if (!window.confirm('Delete this coupon?')) return;
         try {
             await axios.delete(`http://localhost:5001/api/offers/${id}`);
             notify('Coupon deleted.');
+            setConfirmDeleteId(null);
             fetchOffers();
         } catch { notify('Failed to delete.', 'error'); }
     };
 
     const getTodayString = () => new Date().toISOString().split('T')[0];
-
     const isExpired = (validUntil) => validUntil && new Date(validUntil) < new Date();
 
     return (
@@ -166,24 +166,52 @@ const AdminOffers = () => {
                         <p className="text-xs mt-1">Create your first coupon above.</p>
                     </div>
                 ) : offers.map(offer => {
-                    const expired = isExpired(offer.validUntil);
-                    const discVal = offer.value || offer.discountPercent || 0;
-                    const minOrd  = offer.minOrder || offer.minOrderValue || 0;
+                    const expired  = isExpired(offer.validUntil);
+                    const discVal  = offer.value || offer.discountPercent || 0;
+                    const minOrd   = offer.minOrder || offer.minOrderValue || 0;
+                    const deleting = confirmDeleteId === offer._id;
+
                     return (
                         <div key={offer._id}
-                            className={`relative bg-[#1e293b] rounded-2xl border-dashed border p-6 transition-colors group
+                            className={`relative bg-[#1e293b] rounded-2xl border-dashed border p-6 transition-all group overflow-hidden
                                 ${expired ? 'border-slate-700 opacity-60' : 'border-slate-600 hover:border-indigo-500'}`}>
 
                             {/* Ticket cut-outs */}
                             <div className="absolute -left-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-[#0f172a] rounded-full"/>
                             <div className="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-[#0f172a] rounded-full"/>
 
+                            {/* ── INLINE DELETE CONFIRMATION OVERLAY ── */}
+                            {deleting && (
+                                <div className="absolute inset-0 z-10 bg-[#1e293b]/95 backdrop-blur-sm rounded-2xl flex flex-col items-center justify-center gap-4 px-6 text-center">
+                                    <div className="w-12 h-12 rounded-full bg-red-500/15 flex items-center justify-center">
+                                        <FiTrash2 className="text-red-400" size={22}/>
+                                    </div>
+                                    <div>
+                                        <p className="text-white font-bold text-sm">Delete this coupon?</p>
+                                        <p className="text-slate-400 text-xs mt-1">This action cannot be undone.</p>
+                                    </div>
+                                    <div className="flex gap-3 w-full">
+                                        <button
+                                            onClick={() => setConfirmDeleteId(null)}
+                                            className="flex-1 flex items-center justify-center gap-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold py-2.5 rounded-xl transition-all">
+                                            <FiX size={13}/> Cancel
+                                        </button>
+                                        <button
+                                            onClick={() => handleDelete(offer._id)}
+                                            className="flex-1 flex items-center justify-center gap-1.5 bg-red-600 hover:bg-red-500 text-white text-xs font-bold py-2.5 rounded-xl transition-all active:scale-95">
+                                            <FiTrash2 size={13}/> Delete
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Top row */}
                             <div className="flex justify-between items-start mb-4">
                                 <span className="bg-indigo-500/20 text-indigo-300 text-xs font-bold px-2.5 py-1 rounded-lg uppercase max-w-[70%] truncate">
                                     {offer.description || offer.name || 'Special Offer'}
                                 </span>
-                                <button onClick={()=>handleDelete(offer._id)}
+                                <button
+                                    onClick={() => setConfirmDeleteId(offer._id)}
                                     className="text-slate-500 hover:text-red-400 transition-colors p-1">
                                     <FiTrash2 size={16}/>
                                 </button>
