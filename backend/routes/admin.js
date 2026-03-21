@@ -136,25 +136,45 @@ router.get('/staff', async (req, res) => {
     }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// REPLACE your existing router.post('/add-staff') in admin.js with this:
+// ─────────────────────────────────────────────────────────────────────────────
+
 router.post('/add-staff', async (req, res) => {
     try {
-        const { name, username, employeeId, email, password } = req.body;
+        const { name, username, employeeId, email, password, phone } = req.body;
         const finalName = name || username;
 
-        if (!finalName || !employeeId || !email || !password)
-            return res.status(400).json({ message: 'All fields are required' });
+        // ── Validate required fields ──────────────────────────────────────────
+        if (!finalName)    return res.status(400).json({ message: 'Name is required.' });
+        if (!employeeId)   return res.status(400).json({ message: 'Employee ID is required.' });
+        if (!email)        return res.status(400).json({ message: 'Email is required.' });
+        if (!password)     return res.status(400).json({ message: 'Password is required.' });
+        if (!phone)        return res.status(400).json({ message: 'Phone number is required.' });
+        if (!/^\d{10}$/.test(phone.toString().trim()))
+            return res.status(400).json({ message: 'Enter a valid 10-digit phone number.' });
 
-        const existingUser = await User.findOne({ $or: [{ employeeId }, { email }] });
-        if (existingUser)
-            return res.status(400).json({ message: 'Employee ID or Email already exists' });
+        // ── Check uniqueness ──────────────────────────────────────────────────
+        const existingUser = await User.findOne({
+            $or: [{ employeeId }, { email }, { phone: phone.toString().trim() }]
+        });
+        if (existingUser) {
+            if (existingUser.employeeId === employeeId)
+                return res.status(400).json({ message: 'Employee ID already exists.' });
+            if (existingUser.email === email)
+                return res.status(400).json({ message: 'Email already exists.' });
+            if (existingUser.phone === phone.toString().trim())
+                return res.status(400).json({ message: 'Phone number already registered.' });
+        }
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
         const newStaff = new User({
-            name: finalName,
+            name:         finalName,
             employeeId,
             email,
-            password: hashedPassword,
+            phone:        phone.toString().trim(),   // ← required for OTP login
+            password:     hashedPassword,
             role:         'staff',
             isActive:     true,
             isFirstLogin: true,
@@ -162,9 +182,45 @@ router.post('/add-staff', async (req, res) => {
 
         await newStaff.save();
         res.status(201).json({ message: 'Staff Account Created Successfully' });
+
     } catch (err) {
         console.error('Create Staff Error:', err);
         res.status(500).json({ message: 'Internal Server Error' });
+    }
+});
+
+// ── ADMIN PROFILE UPDATE (missing — AdminSettings.jsx calls this) ──
+router.put('/profile/:id', async (req, res) => {
+    try {
+        const { name, email } = req.body;
+        const userId = req.params.id;
+
+        if (!name || !name.trim())
+            return res.status(400).json({ message: 'Name cannot be empty.' });
+
+        const updatedUser = await User.findByIdAndUpdate(
+            userId,
+            { $set: { name: name.trim(), email: email?.trim() || '' } },
+            { new: true, runValidators: true }
+        ).select('-password');
+
+        if (!updatedUser)
+            return res.status(404).json({ message: 'User not found.' });
+
+        res.json({
+            message: 'Profile updated successfully',
+            user: {
+                id:         updatedUser._id,
+                name:       updatedUser.name       || '',
+                email:      updatedUser.email      || '',
+                phone:      updatedUser.phone      || '',
+                employeeId: updatedUser.employeeId || '',
+                role:       updatedUser.role,
+            }
+        });
+    } catch (err) {
+        console.error('Admin profile update error:', err);
+        res.status(500).json({ message: 'Failed to update profile.' });
     }
 });
 
@@ -466,6 +522,57 @@ router.delete('/events/:id', async (req, res) => {
         res.json({ message: 'Event deleted successfully' });
     } catch (err) {
         res.status(500).json({ message: 'Failed to delete event' });
+    }
+});
+
+// ─── UPDATE ADMIN PROFILE (name, email, phone) ───────────────────────────────
+// Add this route to your existing routes/admin.js file
+// PUT /api/admin/profile/:id
+
+router.put('/profile/:id', async (req, res) => {
+    try {
+        const { name, email, phone } = req.body;
+        const { id } = req.params;
+
+        if (!name?.trim())
+            return res.status(400).json({ message: 'Name is required.' });
+
+        if (phone && !/^\d{10}$/.test(phone.toString().trim()))
+            return res.status(400).json({ message: 'Enter a valid 10-digit phone number.' });
+
+        const updateFields = {
+            name:  name.trim(),
+            email: email?.trim() || '',
+            phone: phone?.trim() || '',
+        };
+
+        const user = await User.findByIdAndUpdate(
+            id,
+            { $set: updateFields },
+            { new: true }
+        );
+
+        if (!user)
+            return res.status(404).json({ message: 'User not found.' });
+
+        console.log(`✅ Profile updated for: ${user.employeeId || user.name}`);
+
+        res.json({
+            success: true,
+            message: 'Profile updated successfully.',
+            user: {
+                id:         user._id,
+                name:       user.name,
+                email:      user.email      || '',
+                phone:      user.phone      || '',
+                employeeId: user.employeeId || '',
+                role:       user.role,
+            }
+        });
+
+    } catch (err) {
+        console.error('🔥 Profile update error:', err);
+        res.status(500).json({ message: 'Failed to update profile.' });
     }
 });
 

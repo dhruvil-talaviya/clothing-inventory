@@ -3,6 +3,7 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { useAuth } from '../App';
 import {
     FiHome, FiSearch, FiShoppingCart, FiTrash2, FiLogOut,
     FiGrid, FiSettings, FiX, FiPackage, FiClock,
@@ -19,16 +20,15 @@ const RAZORPAY_KEY_ID = 'rzp_test_SQfxCbnImN5fbE';// ← paste your key_id here
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 const INDIAN_CITIES = ["Mumbai","Delhi","Bangalore","Hyderabad","Ahmedabad","Chennai","Kolkata","Surat","Pune","Jaipur","Lucknow","Kanpur","Nagpur","Indore","Thane","Bhopal","Visakhapatnam","Patna","Vadodara","Ghaziabad","Ludhiana","Agra","Nashik","Rajkot","Varanasi","Srinagar","Aurangabad","Amritsar","Navi Mumbai","Allahabad","Ranchi","Coimbatore","Jabalpur","Gwalior","Vijayawada","Jodhpur","Madurai","Raipur","Kota","Guwahati","Chandigarh","Solapur","Mysore","Gurgaon"];
 
-// Master category order — only shown if products actually exist in that category
 const CATEGORY_ORDER = ["All","Shirt","T-Shirt","Jeans","Trousers","Shoes","Jacket","Kurta","Saree","Watch","Accessories"];
 
 const ALL_SIZES  = ['XS','S','M','L','XL','XXL'];
 const GRADIENTS  = ['from-violet-500 to-indigo-600','from-rose-500 to-pink-600','from-amber-500 to-orange-600','from-teal-500 to-cyan-600','from-fuchsia-500 to-purple-600','from-lime-500 to-emerald-600'];
 
 const PAYMENT_METHODS = [
-    { id:'cash', label:'Cash',             icon:FiDollarSign, activeClass:'border-emerald-500 bg-emerald-500/10 text-emerald-400', dotClass:'bg-emerald-400' },
-    { id:'upi',  label:'UPI',              icon:FiSmartphone, activeClass:'border-indigo-500  bg-indigo-500/10  text-indigo-400',  dotClass:'bg-indigo-400'  },
-    { id:'card', label:'Card',             icon:FiCreditCard, activeClass:'border-violet-500  bg-violet-500/10  text-violet-400',  dotClass:'bg-violet-400'  },
+    { id:'cash', label:'Cash',  icon:FiDollarSign, activeClass:'border-emerald-500 bg-emerald-500/10 text-emerald-400', dotClass:'bg-emerald-400' },
+    { id:'upi',  label:'UPI',   icon:FiSmartphone, activeClass:'border-indigo-500  bg-indigo-500/10  text-indigo-400',  dotClass:'bg-indigo-400'  },
+    { id:'card', label:'Card',  icon:FiCreditCard, activeClass:'border-violet-500  bg-violet-500/10  text-violet-400',  dotClass:'bg-violet-400'  },
 ];
 
 // ─── SAFE HELPERS ─────────────────────────────────────────────────────────────
@@ -67,19 +67,15 @@ const generateBillPDF = (sale) => {
     try {
         const doc = new jsPDF({ unit: 'mm', format: 'a4' });
 
-        // ── PAGE CONSTANTS ────────────────────────────────────────────────────
-        const PW  = 210;          // page width
-        const PH  = 297;          // page height
-        const ML  = 18;           // margin left
-        const MR  = 18;           // margin right
-        const CW  = PW - ML - MR; // content width = 174mm
-        const RX  = PW - MR;      // right edge = 192
+        const PW  = 210;
+        const PH  = 297;
+        const ML  = 18;
+        const MR  = 18;
+        const CW  = PW - ML - MR;
+        const RX  = PW - MR;
 
-        // Helper — draw text at exact baseline, returns next y
-        const LH = 5.5; // standard line height mm
-        const txt = (text, x, y, opts={}) => { doc.text(String(text), x, y, opts); return y + LH; };
+        const LH = 5.5;
 
-        // ── COMPUTED VALUES ───────────────────────────────────────────────────
         const invId    = safeStr(sale.invoiceId) || ('#' + safeStr(sale._id).slice(-6).toUpperCase());
         const saleDate = new Date(sale.date || Date.now());
         const dateStr  = saleDate.toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' });
@@ -90,17 +86,11 @@ const generateBillPDF = (sale) => {
         const discount = safeNum(sale.discount);
         const total    = safeNum(sale.totalAmount);
 
-        // ══════════════════════════════════════════════════════════════════════
-        // SECTION 1 — HEADER BANNER  (y: 0 → 48)
-        // ══════════════════════════════════════════════════════════════════════
         doc.setFillColor(15, 23, 42);
         doc.rect(0, 0, PW, 48, 'F');
-
-        // Indigo accent line at bottom of header
         doc.setFillColor(99, 102, 241);
         doc.rect(0, 46, PW, 2, 'F');
 
-        // Left — Brand
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(22);
         doc.setTextColor(255, 255, 255);
@@ -111,7 +101,6 @@ const generateBillPDF = (sale) => {
         doc.setTextColor(148, 163, 184);
         doc.text('RETAIL & FASHION', ML, 28);
 
-        // Right — Invoice meta (vertically stacked, right-aligned, even spacing)
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(7.5);
         doc.setTextColor(148, 163, 184);
@@ -128,58 +117,46 @@ const generateBillPDF = (sale) => {
         doc.text(dateStr, RX, 30, { align: 'right' });
         doc.text(timeStr, RX, 37, { align: 'right' });
 
-        // ══════════════════════════════════════════════════════════════════════
-        // SECTION 2 — INFO CARDS  (y: 54 → 54+cardH)
-        // ══════════════════════════════════════════════════════════════════════
         const cardY  = 54;
         const cardH  = 36;
-        const cardW  = (CW - 6) / 2;  // two equal cards with 6mm gap
+        const cardW  = (CW - 6) / 2;
         const c1x    = ML;
         const c2x    = ML + cardW + 6;
-        const cPad   = 5;              // inner padding
+        const cPad   = 5;
 
-        // Draw both card backgrounds
         doc.setFillColor(246, 248, 251);
         doc.setDrawColor(218, 224, 232);
         doc.setLineWidth(0.25);
         doc.roundedRect(c1x, cardY, cardW, cardH, 2, 2, 'FD');
         doc.roundedRect(c2x, cardY, cardW, cardH, 2, 2, 'FD');
 
-        // Card 1 — Billed To
-        // Label
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(6);
         doc.setTextColor(99, 102, 241);
         doc.text('BILLED TO', c1x + cPad, cardY + 8);
-        // Customer name
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(9);
         doc.setTextColor(15, 23, 42);
         const cName = doc.splitTextToSize(safeStr(sale.customerName, 'Walk-in Customer'), cardW - cPad*2)[0];
         doc.text(cName, c1x + cPad, cardY + 16);
-        // Phone
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(7.5);
         doc.setTextColor(71, 85, 105);
         doc.text('Ph: ' + safeStr(sale.customerPhone, 'N/A'), c1x + cPad, cardY + 23);
-        // Address (optional)
         if (sale.customerAddress) {
             const addr = doc.splitTextToSize(safeStr(sale.customerAddress), cardW - cPad*2)[0];
             doc.text(addr, c1x + cPad, cardY + 30);
         }
 
-        // Card 2 — Sale Info
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(6);
         doc.setTextColor(99, 102, 241);
         doc.text('SALE INFO', c2x + cPad, cardY + 8);
-
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(9);
         doc.setTextColor(15, 23, 42);
         const sName = doc.splitTextToSize(safeStr(sale.staffName || sale.soldBy, 'Staff'), cardW - cPad*2)[0];
         doc.text(sName, c2x + cPad, cardY + 16);
-
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(7.5);
         doc.setTextColor(71, 85, 105);
@@ -190,9 +167,6 @@ const generateBillPDF = (sale) => {
             doc.text('Payment: ' + payLabel, c2x + cPad, cardY + 23);
         }
 
-        // ══════════════════════════════════════════════════════════════════════
-        // SECTION 3 — ITEMS TABLE  (autoTable handles its own y)
-        // ══════════════════════════════════════════════════════════════════════
         const tableY = cardY + cardH + 8;
 
         autoTable(doc, {
@@ -236,24 +210,15 @@ const generateBillPDF = (sale) => {
             tableLineWidth: 0.25,
         });
 
-        // ══════════════════════════════════════════════════════════════════════
-        // SECTION 4 — TOTALS  (strictly positioned rows, no box guessing)
-        // ══════════════════════════════════════════════════════════════════════
         const totY = (doc.lastAutoTable?.finalY ?? tableY) + 6;
+        const ROW = 9;
 
-        // Row heights
-        const ROW = 9;   // each total row height
-        const totalRows = 3; // subtotal + discount + total
-        const totH = ROW * 2 + 12; // subtotal row + discount row + total row (taller)
-
-        // Subtotal row bg
         doc.setFillColor(248, 250, 252);
         doc.setDrawColor(218, 224, 232);
         doc.setLineWidth(0.25);
         doc.rect(ML, totY, CW, ROW, 'FD');
 
-        // Subtotal text — label left, value right, both at same baseline
-        const row1Base = totY + ROW - 2.5; // baseline = row bottom minus descender space
+        const row1Base = totY + ROW - 2.5;
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(8);
         doc.setTextColor(100, 116, 139);
@@ -261,7 +226,6 @@ const generateBillPDF = (sale) => {
         doc.setTextColor(30, 30, 30);
         doc.text('Rs.' + subtotal.toFixed(2), RX - 5, row1Base, { align: 'right' });
 
-        // Discount row bg
         doc.setFillColor(240, 253, 244);
         doc.setDrawColor(218, 224, 232);
         doc.rect(ML, totY + ROW, CW, ROW, 'FD');
@@ -274,7 +238,6 @@ const generateBillPDF = (sale) => {
         doc.setTextColor(22, 163, 74);
         doc.text('- Rs.' + discount.toFixed(2), RX - 5, row2Base, { align: 'right' });
 
-        // Total row — dark, taller
         const totRowH = 13;
         doc.setFillColor(15, 23, 42);
         doc.rect(ML, totY + ROW * 2, CW, totRowH, 'F');
@@ -284,18 +247,13 @@ const generateBillPDF = (sale) => {
         doc.setFontSize(9);
         doc.setTextColor(255, 255, 255);
         doc.text('TOTAL PAYABLE', ML + 5, row3Base);
-
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(11);
         doc.setTextColor(129, 140, 248);
         doc.text('Rs.' + total.toFixed(2), RX - 5, row3Base, { align: 'right' });
 
-        // ══════════════════════════════════════════════════════════════════════
-        // SECTION 5 — PAYMENT BADGE + FOOTER
-        // ══════════════════════════════════════════════════════════════════════
         const afterTotY = totY + ROW * 2 + totRowH + 8;
 
-        // Payment badge — right aligned pill
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(7);
         const badgeTxt = 'Paid via ' + payLabel;
@@ -311,26 +269,22 @@ const generateBillPDF = (sale) => {
         doc.setTextColor(109, 40, 217);
         doc.text(badgeTxt, bX + bW / 2, bY + bH - 2, { align: 'center' });
 
-        // Footer divider
         const footerY = afterTotY + bH + 8;
         doc.setDrawColor(218, 224, 232);
         doc.setLineWidth(0.4);
         doc.line(ML, footerY, RX, footerY);
 
-        // Footer text — all centred, even line spacing
         const f1 = footerY + 8;
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(10);
         doc.setTextColor(99, 102, 241);
         doc.text('Thank you for shopping with StyleSync!', PW / 2, f1, { align: 'center' });
-
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(7.5);
         doc.setTextColor(100, 116, 139);
         doc.text('Returns & exchanges accepted within 7 days with this invoice.', PW / 2, f1 + 7, { align: 'center' });
         doc.text('www.stylesync.in  |  support@stylesync.in', PW / 2, f1 + 13, { align: 'center' });
 
-        // ── SAVE ─────────────────────────────────────────────────────────────
         const filename = 'StyleSync_' + invId + '_' + safeStr(sale.customerName, 'Customer').replace(/[^a-z0-9]/gi, '_') + '.pdf';
         doc.save(filename);
 
@@ -510,7 +464,6 @@ const StaffEventBadge = ({ status }) => {
     );
 };
 
-// ─── DARK SCROLLBAR — injected once globally ──────────────────────────────────
 const DarkScrollStyle = () => (
     <style>{`
         .ds::-webkit-scrollbar { width: 4px; height: 4px; }
@@ -525,7 +478,22 @@ const DarkScrollStyle = () => (
 // MAIN STAFF DASHBOARD
 // ══════════════════════════════════════════════════════════════════════════════
 const StaffDashboard = () => {
+ 
+
     const navigate = useNavigate();
+    const { setStatus, setAuthUser, setAccessToken } = useAuth();
+
+    const handleLogout = useCallback(async () => {
+        try {
+            await axios.post('http://localhost:5001/api/auth/logout', {}, { withCredentials: true });
+        } catch { /* server down — still log out locally */ }
+        setAccessToken(null);
+        setAuthUser(null);
+        setStatus('invalid');
+        localStorage.removeItem('user');
+        localStorage.removeItem('role');
+        navigate('/', { replace: true });
+    }, [navigate, setStatus, setAuthUser, setAccessToken]);
 
     const [user]        = useState(()=>{ try{ return JSON.parse(localStorage.getItem('user'))||null; }catch{ return null; } });
     const [currentUser, setCurrentUser] = useState(()=>{ try{ return JSON.parse(localStorage.getItem('user'))||user; }catch{ return user; } });
@@ -613,13 +581,11 @@ const StaffDashboard = () => {
     const eventsWithLiveStatus = useMemo(()=>events.map(e=>({...e,_liveStatus:computeEventStatus(e)})),[events]);
     const activeEventCount     = useMemo(()=>eventsWithLiveStatus.filter(e=>e._liveStatus==='Active').length,[eventsWithLiveStatus]);
 
-    // ── DYNAMIC CATEGORIES: only show tabs that have actual products ──────────
     const availableCategories = useMemo(()=>{
         const presentCats = new Set(products.map(p=>safeStr(p.category)).filter(Boolean));
         return CATEGORY_ORDER.filter(c => c==='All' || presentCats.has(c));
     },[products]);
 
-    // ── Reset to "All" if current category disappears after data refresh ──────
     useEffect(()=>{
         if (category!=='All' && !availableCategories.includes(category)) setCategory('All');
     },[availableCategories, category]);
@@ -737,29 +703,47 @@ const StaffDashboard = () => {
         otpTimerRef.current=setInterval(()=>{ setOtpTimer(t=>{ if(t<=1){ clearInterval(otpTimerRef.current); return 0; } return t-1; }); },1000);
     };
 
-    const handleRequestOtp = async ()=>{
-        if(!pwForm.currentPassword){ setSettingMsg({type:'error',text:'Enter your current password first.'}); return; }
-        if(pwForm.newPassword.length<6){ setSettingMsg({type:'error',text:'New password must be at least 6 characters.'}); return; }
-        if(pwForm.newPassword!==pwForm.confirmPassword){ setSettingMsg({type:'error',text:'New passwords do not match.'}); return; }
+    const handleRequestOtp = async () => {
+        if (!pwForm.currentPassword) { setSettingMsg({ type: 'error', text: 'Enter your current password first.' }); return; }
+        if (pwForm.newPassword.length < 6) { setSettingMsg({ type: 'error', text: 'New password must be at least 6 characters.' }); return; }
+        if (pwForm.newPassword !== pwForm.confirmPassword) { setSettingMsg({ type: 'error', text: 'New passwords do not match.' }); return; }
         setOtpStep('sending'); setSettingMsg(null);
-        const generated=Math.floor(100000+Math.random()*900000).toString();
-        setOtpCode(generated);
-        setTimeout(()=>{ setOtpStep('verify'); startOtpTimer(); notify(`Demo OTP: ${generated}`,'success'); },1200);
+        try {
+            await axios.post('http://localhost:5001/api/auth/send-otp', { phone: currentUser.phone });
+            setOtpStep('verify');
+            startOtpTimer();
+            notify('OTP sent to your registered mobile number!');
+        } catch (err) {
+            setOtpStep('idle');
+            setSettingMsg({ type: 'error', text: err.response?.data?.message || 'Failed to send OTP.' });
+        }
     };
 
-    const handleVerifyOtpAndChange = async ()=>{
-        if(otpInput.trim()!==otpCode){ setSettingMsg({type:'error',text:'Incorrect OTP. Please try again.'}); return; }
-        const userId=user?.id||user?._id;
+    const handleVerifyOtpAndChange = async () => {
+        const userId = user?.id || user?._id;
         setSettingLoading(true); setSettingMsg(null);
         try {
-            await axios.post('http://localhost:5001/api/staff/change-password',{userId,currentPassword:pwForm.currentPassword,newPassword:pwForm.newPassword});
-            setOtpStep('done'); setSettingMsg({type:'success',text:'Password changed successfully!'});
-            setPwForm({currentPassword:'',newPassword:'',confirmPassword:''}); setOtpInput(''); clearInterval(otpTimerRef.current); notify('Password updated!');
-        } catch(err){ setSettingMsg({type:'error',text:err.response?.data?.message||'Password change failed.'}); setOtpStep('idle'); }
-        finally{ setSettingLoading(false); }
+            await axios.post('http://localhost:5001/api/auth/verify-otp', {
+                phone: currentUser.phone,
+                otp: otpInput.trim(),
+            });
+            await axios.post('http://localhost:5001/api/staff/change-password', {
+                userId,
+                currentPassword: pwForm.currentPassword,
+                newPassword: pwForm.newPassword,
+            });
+            setOtpStep('done');
+            setSettingMsg({ type: 'success', text: 'Password changed successfully!' });
+            setPwForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+            setOtpInput('');
+            clearInterval(otpTimerRef.current);
+            notify('Password updated!');
+        } catch (err) {
+            setSettingMsg({ type: 'error', text: err.response?.data?.message || 'OTP verification or password change failed.' });
+            setOtpStep('idle');
+        } finally { setSettingLoading(false); }
     };
 
-    // ── Shared: save sale to DB after payment confirmed ─────────────────────
     const completeSale = async (saleData) => {
         const res = await axios.post('http://localhost:5001/api/staff/create-sale', saleData);
         const savedSale = { ...saleData, _id: res.data?.sale?._id||'', invoiceId: res.data?.sale?.invoiceId||'', date: new Date() };
@@ -771,7 +755,6 @@ const StaffDashboard = () => {
         setTimeout(() => { setSelectedSale(savedSale); setInvoiceEmail(saleData.customerEmail||''); }, 300);
     };
 
-    // ── Load Razorpay script dynamically ─────────────────────────────────────
     const loadRazorpay = () => new Promise((resolve) => {
         if (window.Razorpay) { resolve(true); return; }
         const s = document.createElement('script');
@@ -784,8 +767,8 @@ const StaffDashboard = () => {
     const handleCheckout = async (e) => {
         e.preventDefault();
         const userId = user?.id || user?._id;
-        if (!userId)                        { notify('Session expired. Please log in again.', 'error'); return; }
-        if (cart.length === 0)              { notify('Cart is empty!', 'error'); return; }
+        if (!userId)                          { notify('Session expired. Please log in again.', 'error'); return; }
+        if (cart.length === 0)                { notify('Cart is empty!', 'error'); return; }
         if (customerForm.phone.length !== 10) { notify('Enter a valid 10-digit phone number.', 'error'); return; }
 
         const saleData = {
@@ -811,21 +794,18 @@ const StaffDashboard = () => {
             paymentMethod:   selectedPaymentMethod,
         };
 
-        // ── CASH — save directly ──────────────────────────────────────────────
         if (selectedPaymentMethod === 'cash') {
             try { await completeSale(saleData); }
             catch (err) { notify(safeStr(err.response?.data?.message, 'Checkout failed.'), 'error'); }
             return;
         }
 
-        // ── UPI / CARD — go through Razorpay ─────────────────────────────────
         try {
             setRazorpayLoading(true);
             const loaded = await loadRazorpay();
             if (!loaded) { notify('Razorpay failed to load. Check internet connection.', 'error'); setRazorpayLoading(false); return; }
 
-            // Create Razorpay order on backend
-            const amountPaise = Math.round(finalTotal * 100); // Razorpay takes paise
+            const amountPaise = Math.round(finalTotal * 100);
             const orderRes = await axios.post('http://localhost:5001/api/staff/create-razorpay-order', {
                 amount: amountPaise,
                 currency: 'INR',
@@ -845,24 +825,20 @@ const StaffDashboard = () => {
                     email:   customerForm.email   || '',
                     contact: customerForm.phone   || '',
                 },
-                // Pre-select payment method
                 config: {
                     display: {
                         blocks: {
                             utib: { name: selectedPaymentMethod === 'upi' ? 'Pay via UPI' : 'Pay via Card', instruments: [
-                                selectedPaymentMethod === 'upi'
-                                    ? { method: 'upi' }
-                                    : { method: 'card' }
+                                selectedPaymentMethod === 'upi' ? { method: 'upi' } : { method: 'card' }
                             ]},
                         },
-                        sequence:     ['block.utib'],
-                        preferences:  { show_default_blocks: false },
+                        sequence:    ['block.utib'],
+                        preferences: { show_default_blocks: false },
                     },
                 },
                 theme:   { color: '#6366f1' },
                 modal:   { ondismiss: () => { notify('Payment cancelled.', 'error'); setRazorpayLoading(false); } },
                 handler: async (response) => {
-                    // Payment succeeded — verify on backend then save sale
                     try {
                         await axios.post('http://localhost:5001/api/staff/verify-razorpay-payment', {
                             razorpay_order_id:   response.razorpay_order_id,
@@ -904,10 +880,7 @@ const StaffDashboard = () => {
         if (!email || !email.includes('@')) { notify('Enter a valid email address.', 'error'); return; }
         setEmailSending(true); setEmailStatus(null);
         try {
-            await axios.post('http://localhost:5001/api/staff/send-invoice-email', {
-                saleId: sale._id,
-                email,
-            });
+            await axios.post('http://localhost:5001/api/staff/send-invoice-email', { saleId: sale._id, email });
             setEmailStatus('sent');
             notify('Invoice emailed successfully!');
         } catch (err) {
@@ -952,7 +925,8 @@ const StaffDashboard = () => {
                     <NavIcon icon={<FiCalendar size={18}/>} active={view==='events'}   onClick={()=>setView('events')}   label="Events" badge={activeEventCount}/>
                     <NavIcon icon={<FiSettings size={18}/>} active={view==='settings'} onClick={()=>setView('settings')} label="Settings"/>
                 </div>
-                <button onClick={()=>navigate('/')} className="p-3 mt-auto text-slate-600 hover:text-red-400 transition-colors">
+                {/* ✅ FIX: was onClick={()=>navigate('/')} — now calls handleLogout which clears localStorage first */}
+                <button onClick={handleLogout} className="p-3 mt-auto text-slate-600 hover:text-red-400 transition-colors">
                     <FiLogOut size={18}/>
                 </button>
             </nav>
@@ -1018,49 +992,26 @@ const StaffDashboard = () => {
                 {/* ══ POS / BILLING ══ */}
                 {view==='pos'&&(
                     <div className="flex h-full overflow-hidden">
-
-                        {/* ── Products panel ── */}
                         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-
-                            {/* Category bar + search — FIXED: no clipping, dark scrollbar */}
                             <div className="px-4 pt-3 pb-2 border-b border-slate-800 shrink-0">
                                 <div className="flex items-center gap-3">
-                                    {/*
-                                     * KEY FIX 1 — Dynamic categories: only tabs whose category
-                                     *   exists in the actual products data are rendered.
-                                     * KEY FIX 2 — Scrollbar: "ds" class applies the thin dark
-                                     *   4px scrollbar instead of the browser's wide light one.
-                                     * KEY FIX 3 — "All" was being cut off because the outer div
-                                     *   had overflow-x:hidden. Now flex-1 + min-w-0 + ds handles it.
-                                     */}
                                     <div className="flex gap-1.5 overflow-x-auto ds flex-1 min-w-0 pb-1">
                                         {availableCategories.map(cat=>(
-                                            <button
-                                                key={cat}
-                                                onClick={()=>setCategory(cat)}
+                                            <button key={cat} onClick={()=>setCategory(cat)}
                                                 className={`px-3 py-1.5 rounded-full text-[11px] font-bold whitespace-nowrap border transition-all shrink-0
-                                                    ${category===cat
-                                                        ? 'bg-indigo-600 text-white border-indigo-500'
-                                                        : 'bg-[#0F172A] text-slate-400 border-slate-800 hover:text-white hover:border-slate-600'
-                                                    }`}>
+                                                    ${category===cat?'bg-indigo-600 text-white border-indigo-500':'bg-[#0F172A] text-slate-400 border-slate-800 hover:text-white hover:border-slate-600'}`}>
                                                 {cat}
                                             </button>
                                         ))}
                                     </div>
-                                    {/* Search */}
                                     <div className="relative shrink-0">
                                         <FiSearch className="absolute left-3 top-2.5 text-slate-500" size={13}/>
-                                        <input
-                                            type="text"
-                                            placeholder="Search…"
-                                            onChange={e=>setSearch(e.target.value)}
-                                            className="bg-[#0F172A] border border-slate-800 rounded-xl py-2 pl-8 pr-3 text-white w-44 text-xs outline-none focus:border-indigo-500 transition-all"
-                                        />
+                                        <input type="text" placeholder="Search…" onChange={e=>setSearch(e.target.value)}
+                                            className="bg-[#0F172A] border border-slate-800 rounded-xl py-2 pl-8 pr-3 text-white w-44 text-xs outline-none focus:border-indigo-500 transition-all"/>
                                     </div>
                                 </div>
                             </div>
 
-                            {/* Product grid */}
                             <div className="flex-1 overflow-y-auto ds p-4">
                                 {filteredProducts.length===0?(
                                     <div className="h-64 flex flex-col items-center justify-center text-slate-600">
@@ -1079,11 +1030,9 @@ const StaffDashboard = () => {
                                                     className={`group bg-[#0F172A] rounded-xl border overflow-hidden transition-all flex flex-col
                                                         ${isOut?'opacity-50 cursor-not-allowed border-slate-800':'border-slate-800 hover:border-indigo-500/60 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-indigo-500/10 cursor-pointer'}`}>
                                                     <div className="relative h-40 overflow-hidden bg-slate-900">
-                                                        <img
-                                                            src={safeStr(p.image)||getProductImage(p.name)} alt={p.name}
+                                                        <img src={safeStr(p.image)||getProductImage(p.name)} alt={p.name}
                                                             onError={e=>{ e.target.onerror=null; e.target.src=getProductImage(p.name); }}
-                                                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                                                        />
+                                                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"/>
                                                         {!isOut&&<div className="absolute inset-0 bg-indigo-700/75 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                                             <span className="bg-white text-indigo-700 font-black text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 transform scale-75 group-hover:scale-100 transition-transform"><FiPlus size={12}/> Pick Size</span>
                                                         </div>}
@@ -1110,13 +1059,11 @@ const StaffDashboard = () => {
 
                         {/* ── Cart sidebar ── */}
                         <div className="w-[340px] xl:w-[380px] shrink-0 bg-[#0F172A] border-l border-slate-800 flex flex-col">
-                            {/* Header */}
                             <div className="p-4 border-b border-slate-800 shrink-0 space-y-3">
                                 <div className="flex items-center justify-between">
                                     <h2 className="text-base font-black text-white flex items-center gap-2"><FiShoppingCart className="text-indigo-400" size={16}/> Current Bill</h2>
                                     {cartItemCount>0&&<span className="bg-indigo-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full">{cartItemCount} items</span>}
                                 </div>
-                                {/* Scanner */}
                                 <div className="bg-[#080C14] rounded-xl border border-slate-800 p-3 space-y-2">
                                     <div className="flex items-center justify-between">
                                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
@@ -1140,7 +1087,6 @@ const StaffDashboard = () => {
                                 </div>
                             </div>
 
-                            {/* Cart items */}
                             <div className="flex-1 overflow-y-auto ds p-3 space-y-2">
                                 {cart.length===0?(
                                     <div className="h-full flex flex-col items-center justify-center text-slate-700 gap-2">
@@ -1170,9 +1116,7 @@ const StaffDashboard = () => {
                                 ))}
                             </div>
 
-                            {/* Totals + coupon + checkout */}
                             <div className="p-3 border-t border-slate-800 space-y-3 shrink-0">
-                                {/* Coupon */}
                                 <div>
                                     <button onClick={()=>setShowCoupons(v=>!v)} className="w-full flex items-center justify-between group mb-1.5">
                                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
@@ -1196,7 +1140,6 @@ const StaffDashboard = () => {
                                         </div>
                                     )}
                                 </div>
-                                {/* Totals */}
                                 <div className="bg-[#080C14] border border-slate-800 rounded-xl p-3 space-y-1.5">
                                     <div className="flex justify-between text-xs text-slate-400"><span>Subtotal</span><span className="font-mono text-slate-200">Rs.{subtotal.toFixed(2)}</span></div>
                                     <div className="flex justify-between text-xs text-emerald-400"><span>Discount</span><span className="font-mono">-Rs.{discountVal.toFixed(2)}</span></div>
@@ -1313,7 +1256,6 @@ const StaffDashboard = () => {
                             </div>
                         )}
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                            {/* Profile sidebar */}
                             <div className="bg-[#0F172A] rounded-2xl border border-slate-800 p-6 h-fit">
                                 <div className="flex flex-col items-center mb-6 pb-6 border-b border-slate-800/50">
                                     <div className="relative group mb-3">
@@ -1349,7 +1291,6 @@ const StaffDashboard = () => {
                                 </div>
                             </div>
 
-                            {/* Main panel */}
                             <div className="lg:col-span-2 space-y-4">
                                 {settingTab==='profile'&&(
                                     <form onSubmit={handleSaveProfile} className="bg-[#0F172A] rounded-2xl border border-slate-800 p-6">
@@ -1455,19 +1396,14 @@ const StaffDashboard = () => {
                                 <div className="space-y-1.5"><label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Customer Name *</label><input required type="text" placeholder="e.g. Rahul Sharma" value={customerForm.name} onChange={e=>setCustomerForm(f=>({...f,name:e.target.value}))} className="w-full bg-[#080C14] border border-slate-700 text-white p-3 rounded-xl outline-none focus:border-indigo-500 transition-all text-sm"/></div>
                                 <div className="space-y-1.5"><label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Phone Number *</label><input required type="text" maxLength="10" placeholder="10-digit number" value={customerForm.phone} onChange={e=>setCustomerForm(f=>({...f,phone:e.target.value.replace(/\D/g,'')}))} className="w-full bg-[#080C14] border border-slate-700 text-white p-3 rounded-xl outline-none focus:border-indigo-500 transition-all text-sm"/></div>
                             </div>
-                            {/* Email — optional, invoice will be emailed if provided */}
                             <div className="space-y-1.5">
                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
                                     Email Address
                                     <span className="px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-[8px] font-black normal-case tracking-normal">Invoice will be emailed</span>
                                 </label>
-                                <input
-                                    type="email"
-                                    placeholder="customer@email.com (optional)"
-                                    value={customerForm.email}
+                                <input type="email" placeholder="customer@email.com (optional)" value={customerForm.email}
                                     onChange={e=>setCustomerForm(f=>({...f,email:e.target.value}))}
-                                    className="w-full bg-[#080C14] border border-slate-700 text-white p-3 rounded-xl outline-none focus:border-indigo-500 transition-all text-sm"
-                                />
+                                    className="w-full bg-[#080C14] border border-slate-700 text-white p-3 rounded-xl outline-none focus:border-indigo-500 transition-all text-sm"/>
                             </div>
                             <div className="space-y-1.5 relative">
                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">City *</label>
@@ -1479,7 +1415,6 @@ const StaffDashboard = () => {
                                 )}
                             </div>
                             <div className="space-y-1.5"><label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Address (Optional)</label><textarea rows="2" placeholder="Street, area…" value={customerForm.homeAddress} onChange={e=>setCustomerForm(f=>({...f,homeAddress:e.target.value}))} className="w-full bg-[#080C14] border border-slate-700 text-white p-3 rounded-xl outline-none focus:border-indigo-500 transition-all resize-none text-sm"/></div>
-                            {/* Payment Method */}
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Payment Method *</label>
                                 <div className="grid grid-cols-3 gap-2">
@@ -1515,17 +1450,12 @@ const StaffDashboard = () => {
                                 <button type="button" onClick={()=>setShowBillModal(false)} className="flex-1 py-3 text-slate-400 font-bold hover:text-white hover:bg-slate-800 rounded-xl transition-all text-sm">Cancel</button>
                                 <button type="submit" disabled={razorpayLoading} className={
                                     'flex-[2] py-3 text-white font-black rounded-xl transition-all flex items-center justify-center gap-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed ' +
-                                    (selectedPaymentMethod==='cash' ? 'bg-emerald-600 hover:bg-emerald-500' : selectedPaymentMethod==='upi' ? 'bg-indigo-600 hover:bg-indigo-500' : 'bg-violet-600 hover:bg-violet-500')
+                                    (selectedPaymentMethod==='cash'?'bg-emerald-600 hover:bg-emerald-500':selectedPaymentMethod==='upi'?'bg-indigo-600 hover:bg-indigo-500':'bg-violet-600 hover:bg-violet-500')
                                 }>
-                                    {razorpayLoading ? (
-                                        <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> Processing...</>
-                                    ) : selectedPaymentMethod==='cash' ? (
-                                        <><FiPrinter size={14}/><span>Complete Sale</span></>
-                                    ) : selectedPaymentMethod==='upi' ? (
-                                        <><FiSmartphone size={14}/><span>Pay via UPI</span></>
-                                    ) : (
-                                        <><FiCreditCard size={14}/><span>Pay via Card</span></>
-                                    )}
+                                    {razorpayLoading?(<><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> Processing...</>)
+                                    :selectedPaymentMethod==='cash'?(<><FiPrinter size={14}/><span>Complete Sale</span></>)
+                                    :selectedPaymentMethod==='upi'?(<><FiSmartphone size={14}/><span>Pay via UPI</span></>)
+                                    :(<><FiCreditCard size={14}/><span>Pay via Card</span></>)}
                                 </button>
                             </div>
                         </form>
@@ -1566,7 +1496,6 @@ const StaffDashboard = () => {
                                 <div className="flex justify-between text-sm text-emerald-400 font-bold"><span>Discount</span><span>-Rs.{safeNum(selectedSale.discount).toFixed(2)}</span></div>
                                 <div className="flex justify-between text-lg font-black text-white pt-2 border-t border-slate-800"><span>Total</span><span className="text-indigo-400">Rs.{safeNum(selectedSale.totalAmount).toFixed(2)}</span></div>
                             </div>
-                            {/* ── Manual email send ── */}
                             <div className="bg-[#0F172A] border border-slate-700 rounded-xl p-3.5 space-y-2.5">
                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
                                     <FiMail className="text-indigo-400" size={11}/> Email Invoice to Customer
@@ -1588,21 +1517,13 @@ const StaffDashboard = () => {
                                     </p>
                                 )}
                                 <div className="flex gap-2">
-                                    <input
-                                        type="email"
-                                        placeholder="customer@email.com"
-                                        value={invoiceEmail}
+                                    <input type="email" placeholder="customer@email.com" value={invoiceEmail}
                                         onChange={e=>{ setInvoiceEmail(e.target.value); setEmailStatus(null); }}
-                                        className="flex-1 bg-[#080C14] border border-slate-700 rounded-xl py-2.5 px-3 text-white text-xs outline-none focus:border-indigo-500 transition-all"
-                                    />
-                                    <button
-                                        onClick={()=>handleSendInvoiceEmail(selectedSale, invoiceEmail)}
+                                        className="flex-1 bg-[#080C14] border border-slate-700 rounded-xl py-2.5 px-3 text-white text-xs outline-none focus:border-indigo-500 transition-all"/>
+                                    <button onClick={()=>handleSendInvoiceEmail(selectedSale, invoiceEmail)}
                                         disabled={emailSending||!invoiceEmail}
                                         className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-black rounded-xl transition-all flex items-center gap-1.5 shrink-0">
-                                        {emailSending
-                                            ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"/> Sending…</>
-                                            : <><FiMail size={12}/> Send</>
-                                        }
+                                        {emailSending?<><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"/> Sending…</>:<><FiMail size={12}/> Send</>}
                                     </button>
                                 </div>
                             </div>
@@ -1614,8 +1535,8 @@ const StaffDashboard = () => {
                     </div>
                 </div>
             )}
-        </div>   
-    ); 
+        </div>
+    );
 };
 
 export default StaffDashboard;

@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import axios from 'axios';
 import { 
     FiSearch, FiShoppingCart, FiX, FiPlus, FiMinus, FiTag,
-    FiCheckCircle, FiAlertTriangle, FiLock, FiPrinter, FiPackage
+    FiCheckCircle, FiAlertTriangle, FiLock, FiPrinter, FiPackage,
+    FiDollarSign, FiCreditCard, FiSmartphone
 } from 'react-icons/fi';
 import { BiBarcodeReader } from 'react-icons/bi';
 
@@ -22,6 +23,37 @@ const getProductImage = (name = '') => {
     if (n.includes('watch'))   return 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=400&q=80';
     return 'https://images.unsplash.com/photo-1525507119028-ed4c629a60a3?auto=format&fit=crop&w=400&q=80';
 };
+
+// ─── PAYMENT METHOD CONFIG ────────────────────────────────────────────────────
+const PAYMENT_METHODS = [
+    {
+        key:   'cash',
+        label: 'Cash',
+        icon:  <FiDollarSign size={20}/>,
+        desc:  'Physical currency',
+        color: '#10b981',
+        bg:    'rgba(16,185,129,0.1)',
+        ring:  'rgba(16,185,129,0.4)',
+    },
+    {
+        key:   'upi',
+        label: 'UPI',
+        icon:  <FiSmartphone size={20}/>,
+        desc:  'GPay, PhonePe, Paytm',
+        color: '#8b5cf6',
+        bg:    'rgba(139,92,246,0.1)',
+        ring:  'rgba(139,92,246,0.4)',
+    },
+    {
+        key:   'card',
+        label: 'Card',
+        icon:  <FiCreditCard size={20}/>,
+        desc:  'Debit / Credit card',
+        color: '#0ea5e9',
+        bg:    'rgba(14,165,233,0.1)',
+        ring:  'rgba(14,165,233,0.4)',
+    },
+];
 
 // ─── BARCODE SCANNER HOOK ─────────────────────────────────────────────────────
 const useBarcodeScanner = (onScan, enabled = true) => {
@@ -52,8 +84,6 @@ const useBarcodeScanner = (onScan, enabled = true) => {
 };
 
 // ─── SIZE SELECTOR MODAL ──────────────────────────────────────────────────────
-// Shows product thumbnail + price in header.
-// Clicking an in-stock size immediately adds to cart (one tap, no extra confirm).
 const SizeSelectorModal = ({ product, onSelect, onClose }) => {
     if (!product) return null;
     const variants    = safeArr(product.variants);
@@ -65,8 +95,6 @@ const SizeSelectorModal = ({ product, onSelect, onClose }) => {
             onClick={e => { if (e.target === e.currentTarget) onClose(); }}
         >
             <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
-
-                {/* ── Header: thumbnail + name + price ── */}
                 <div className="p-5 border-b border-slate-800 bg-slate-950 flex items-center gap-4">
                     <img
                         src={safeStr(product.image) || getProductImage(product.name)}
@@ -83,42 +111,29 @@ const SizeSelectorModal = ({ product, onSelect, onClose }) => {
                             Rs.{safeNum(product.price).toFixed(2)}
                         </p>
                     </div>
-                    <button
-                        onClick={onClose}
-                        className="shrink-0 w-8 h-8 bg-slate-800 hover:bg-red-900/50 text-slate-400 hover:text-red-400 rounded-xl flex items-center justify-center transition-all"
-                    >
+                    <button onClick={onClose} className="shrink-0 w-8 h-8 bg-slate-800 hover:bg-red-900/50 text-slate-400 hover:text-red-400 rounded-xl flex items-center justify-center transition-all">
                         <FiX size={15}/>
                     </button>
                 </div>
-
                 <div className="p-5">
                     {hasVariants ? (
                         <>
                             <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">
                                 Tap a size to instantly add to cart
                             </p>
-                            {/* ── Size grid — one tap adds to cart ── */}
                             <div className="grid grid-cols-3 gap-3 mb-4">
                                 {SIZES.map(size => {
-                                    const variant  = variants.find(v => v.size === size);
-                                    const stock    = safeNum(variant?.stock);
-                                    const exists   = !!variant;
-                                    const inStock  = exists && stock > 0;
-                                    const isLow    = inStock && stock <= 5;
-
+                                    const variant = variants.find(v => v.size === size);
+                                    const stock   = safeNum(variant?.stock);
+                                    const exists  = !!variant;
+                                    const inStock = exists && stock > 0;
+                                    const isLow   = inStock && stock <= 5;
                                     return (
-                                        <button
-                                            key={size}
-                                            disabled={!inStock}
-                                            onClick={() => onSelect(product, size, variant)}
+                                        <button key={size} disabled={!inStock} onClick={() => onSelect(product, size, variant)}
                                             className={`flex flex-col items-center justify-center py-5 rounded-xl border font-black text-xl transition-all duration-150
-                                                ${!exists
-                                                    ? 'opacity-20 cursor-not-allowed bg-slate-950 border-slate-800 text-slate-700'
-                                                    : !inStock
-                                                    ? 'opacity-40 cursor-not-allowed bg-red-950/30 border-red-500/20 text-red-500'
-                                                    : 'bg-slate-800 border-slate-700 hover:border-indigo-500 hover:bg-indigo-600/20 text-white cursor-pointer active:scale-95'
-                                                }`}
-                                        >
+                                                ${!exists ? 'opacity-20 cursor-not-allowed bg-slate-950 border-slate-800 text-slate-700'
+                                                : !inStock ? 'opacity-40 cursor-not-allowed bg-red-950/30 border-red-500/20 text-red-500'
+                                                : 'bg-slate-800 border-slate-700 hover:border-indigo-500 hover:bg-indigo-600/20 text-white cursor-pointer active:scale-95'}`}>
                                             <span>{size}</span>
                                             {exists && (
                                                 <span className={`text-[9px] font-black mt-1 ${!inStock ? 'text-red-500' : isLow ? 'text-orange-400' : 'text-emerald-400'}`}>
@@ -129,24 +144,18 @@ const SizeSelectorModal = ({ product, onSelect, onClose }) => {
                                     );
                                 })}
                             </div>
-
-                            {/* Stock summary pills */}
                             <div className="flex gap-1.5 flex-wrap pt-3 border-t border-slate-800">
                                 {variants.map(v => (
                                     <span key={v.size} className={`text-[10px] font-black px-2 py-1 rounded-lg border
-                                        ${safeNum(v.stock) <= 0
-                                            ? 'bg-red-500/10 text-red-400 border-red-500/20'
-                                            : safeNum(v.stock) <= 5
-                                            ? 'bg-orange-500/10 text-orange-400 border-orange-500/20'
-                                            : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                                        }`}>
+                                        ${safeNum(v.stock) <= 0 ? 'bg-red-500/10 text-red-400 border-red-500/20'
+                                        : safeNum(v.stock) <= 5 ? 'bg-orange-500/10 text-orange-400 border-orange-500/20'
+                                        : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'}`}>
                                         {v.size}: {v.stock}
                                     </span>
                                 ))}
                             </div>
                         </>
                     ) : (
-                        /* ── No variants — flat stock product ── */
                         <div className="space-y-4">
                             <div className="flex items-center justify-between p-4 bg-slate-950 rounded-xl border border-slate-800">
                                 <div>
@@ -157,24 +166,14 @@ const SizeSelectorModal = ({ product, onSelect, onClose }) => {
                                 </div>
                                 <div className="text-right">
                                     <p className="text-xs text-slate-500 font-bold mb-0.5">Price</p>
-                                    <p className="text-2xl font-black text-emerald-400">
-                                        Rs.{safeNum(product.price).toFixed(2)}
-                                    </p>
+                                    <p className="text-2xl font-black text-emerald-400">Rs.{safeNum(product.price).toFixed(2)}</p>
                                 </div>
                             </div>
-                            <button
-                                disabled={safeNum(product.stock) <= 0}
-                                onClick={() => onSelect(product, 'OS', null)}
+                            <button disabled={safeNum(product.stock) <= 0} onClick={() => onSelect(product, 'OS', null)}
                                 className={`w-full py-4 rounded-xl font-black text-white text-lg transition-all
-                                    ${safeNum(product.stock) <= 0
-                                        ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                                        : 'bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-600/25 active:scale-95'
-                                    }`}
-                            >
-                                {safeNum(product.stock) <= 0
-                                    ? 'Out of Stock'
-                                    : `Add to Cart  Rs.${safeNum(product.price).toFixed(2)}`
-                                }
+                                    ${safeNum(product.stock) <= 0 ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                                    : 'bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-600/25 active:scale-95'}`}>
+                                {safeNum(product.stock) <= 0 ? 'Out of Stock' : `Add to Cart  Rs.${safeNum(product.price).toFixed(2)}`}
                             </button>
                         </div>
                     )}
@@ -191,18 +190,12 @@ const CouponOption = ({ offer, subtotal, selected, onSelect }) => {
     const val        = safeNum(offer.value || offer.discountPercent);
     const type       = safeStr(offer.type).toLowerCase();
     const label      = type === 'percentage' ? `${val}% off` : `Rs.${val} off`;
-
     return (
-        <div
-            onClick={() => isEligible && onSelect(offer)}
+        <div onClick={() => isEligible && onSelect(offer)}
             className={`flex items-center justify-between p-3 rounded-xl border transition-all select-none
-                ${!isEligible
-                    ? 'opacity-50 cursor-not-allowed border-slate-800 bg-slate-900/40'
-                    : selected
-                    ? 'cursor-pointer border-indigo-500 bg-indigo-500/10'
-                    : 'cursor-pointer border-slate-700 bg-slate-950 hover:border-indigo-500/50'
-                }`}
-        >
+                ${!isEligible ? 'opacity-50 cursor-not-allowed border-slate-800 bg-slate-900/40'
+                : selected ? 'cursor-pointer border-indigo-500 bg-indigo-500/10'
+                : 'cursor-pointer border-slate-700 bg-slate-950 hover:border-indigo-500/50'}`}>
             <div className="flex items-center gap-3">
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0
                     ${isEligible ? (selected ? 'bg-indigo-500 text-white' : 'bg-slate-800 text-indigo-400') : 'bg-slate-800 text-slate-600'}`}>
@@ -241,7 +234,11 @@ const POS = ({ products = [], cart = [], setCart, discounts = [], onCheckoutSucc
     const [scanStatus,       setScanStatus]       = useState(null);
     const [scannerActive,    setScannerActive]    = useState(true);
     const [manualSku,        setManualSku]        = useState('');
-    const [customer,         setCustomer]         = useState({ name: '', phone: '', address: '', city: '' });
+
+    // ── Customer + payment state ──────────────────────────────────────────────
+    const [customer, setCustomer] = useState({ name: '', phone: '', address: '', city: '' });
+    // ✅ FIX: paymentMethod is now tracked in state — default 'cash'
+    const [paymentMethod, setPaymentMethod] = useState('cash');
 
     // ── SCAN RESOLVER ─────────────────────────────────────────────────────────
     const resolveScan = useCallback((sku) => {
@@ -255,7 +252,6 @@ const POS = ({ products = [], cart = [], setCart, discounts = [], onCheckoutSucc
         return null;
     }, [products]);
 
-    // ── ADD TO CART WITH SIZE (variant-aware stock check) ─────────────────────
     const addToCartWithSize = useCallback((product, size, variant) => {
         const stockForSize = variant ? safeNum(variant.stock) : safeNum(product.stock);
         if (stockForSize <= 0) {
@@ -287,7 +283,6 @@ const POS = ({ products = [], cart = [], setCart, discounts = [], onCheckoutSucc
         setSizeModal(null);
     }, [setCart]);
 
-    // ── HANDLE SCAN ───────────────────────────────────────────────────────────
     const handleScan = useCallback((sku) => {
         const result = resolveScan(sku);
         if (!result) {
@@ -304,7 +299,6 @@ const POS = ({ products = [], cart = [], setCart, discounts = [], onCheckoutSucc
 
     useBarcodeScanner(handleScan, scannerActive);
 
-    // ── OPEN SIZE MODAL (click on product card) ───────────────────────────────
     const openSizeModal = useCallback((p) => {
         const variants   = safeArr(p.variants);
         const totalStock = variants.length > 0
@@ -315,14 +309,10 @@ const POS = ({ products = [], cart = [], setCart, discounts = [], onCheckoutSucc
             setTimeout(() => setScanStatus(null), 2000);
             return;
         }
-        if (variants.length > 0) {
-            setSizeModal(p);
-        } else {
-            addToCartWithSize(p, 'OS', null);
-        }
+        if (variants.length > 0) { setSizeModal(p); }
+        else { addToCartWithSize(p, 'OS', null); }
     }, [addToCartWithSize]);
 
-    // ── QTY UPDATE ────────────────────────────────────────────────────────────
     const updateQty = useCallback((cartKey, delta) => {
         setCart(prev => prev.map(item => {
             if (item._cartKey !== cartKey) return item;
@@ -336,7 +326,6 @@ const POS = ({ products = [], cart = [], setCart, discounts = [], onCheckoutSucc
         }));
     }, [setCart]);
 
-    // ── CALCULATIONS ─────────────────────────────────────────────────────────
     const subtotal = useMemo(() =>
         cart.reduce((acc, item) => acc + safeNum(item.price) * safeNum(item.qty, 1), 0)
     , [cart]);
@@ -356,14 +345,12 @@ const POS = ({ products = [], cart = [], setCart, discounts = [], onCheckoutSucc
         discounts.filter(o => subtotal >= safeNum(o.minOrder || o.minOrderValue)).length
     , [discounts, subtotal]);
 
-    // Auto-remove coupon if cart drops below minimum
     useEffect(() => {
         if (!selectedDiscount) return;
         const min = safeNum(selectedDiscount.minOrder || selectedDiscount.minOrderValue);
         if (subtotal < min) setSelectedDiscount(null);
     }, [subtotal]); // eslint-disable-line
 
-    // ── FILTER PRODUCTS ───────────────────────────────────────────────────────
     const filtered = useMemo(() => products.filter(p =>
         safeStr(p.name).toLowerCase().includes(search.toLowerCase()) &&
         (category === 'All' || p.category === category)
@@ -378,6 +365,7 @@ const POS = ({ products = [], cart = [], setCart, discounts = [], onCheckoutSucc
         const userInfo = (() => { try { return JSON.parse(localStorage.getItem('user')) || null; } catch { return null; } })();
         if (!userInfo) return alert('Session Expired. Please Login.');
 
+        // ✅ FIX: paymentMethod is now always explicitly set from state
         const saleData = {
             items: cart.map(item => ({
                 productId: item.productId || item._id,
@@ -392,15 +380,17 @@ const POS = ({ products = [], cart = [], setCart, discounts = [], onCheckoutSucc
             customerAddress: customer.address,
             storeLocation:   customer.city,
             subtotal,
-            discount:    discountAmount,
-            totalAmount: finalTotal,
+            discount:        discountAmount,
+            totalAmount:     finalTotal,
+            paymentMethod,          // ✅ always 'cash' | 'upi' | 'card'
             soldBy:    userInfo._id        || userInfo.id,
             staffId:   userInfo.employeeId || userInfo.staffId || 'N/A',
             staffName: userInfo.name       || userInfo.username || 'Staff',
         };
 
         try {
-            const config = userInfo.token ? { headers: { Authorization: `Bearer ${userInfo.token}` } } : {};
+            const token = localStorage.getItem('token');
+            const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
             const res = await axios.post('http://localhost:5001/api/staff/create-sale', saleData, config);
             alert('✅ Sale Completed Successfully!');
             if (onCheckoutSuccess) onCheckoutSuccess(res.data);
@@ -408,6 +398,7 @@ const POS = ({ products = [], cart = [], setCart, discounts = [], onCheckoutSucc
             setShowBillModal(false);
             setSelectedDiscount(null);
             setCustomer({ name: '', phone: '', address: '', city: '' });
+            setPaymentMethod('cash'); // reset to default
         } catch (err) {
             console.error('Checkout Error:', err.response?.data);
             alert(`⚠️ Error: ${err.response?.data?.message || 'Transaction Failed'}`);
@@ -418,13 +409,8 @@ const POS = ({ products = [], cart = [], setCart, discounts = [], onCheckoutSucc
     return (
         <div className="flex h-full text-slate-100 bg-slate-950 font-sans overflow-hidden">
 
-            {/* SIZE MODAL */}
             {sizeModal && (
-                <SizeSelectorModal
-                    product={sizeModal}
-                    onSelect={addToCartWithSize}
-                    onClose={() => setSizeModal(null)}
-                />
+                <SizeSelectorModal product={sizeModal} onSelect={addToCartWithSize} onClose={() => setSizeModal(null)}/>
             )}
 
             {/* ── LEFT: PRODUCTS ─────────────────────────────────────────── */}
@@ -433,30 +419,24 @@ const POS = ({ products = [], cart = [], setCart, discounts = [], onCheckoutSucc
                     <h1 className="text-2xl font-black tracking-tight text-white">POS Terminal</h1>
                     <div className="relative">
                         <FiSearch className="absolute left-3 top-3 text-slate-500" size={15}/>
-                        <input
-                            type="text"
-                            placeholder="Search inventory..."
+                        <input type="text" placeholder="Search inventory..."
                             className="bg-slate-800 rounded-xl py-2.5 pl-9 pr-4 text-sm w-64 border border-slate-700 outline-none focus:border-indigo-500 transition-all"
-                            onChange={e => setSearch(e.target.value)}
-                        />
+                            onChange={e => setSearch(e.target.value)}/>
                     </div>
                 </div>
 
-                {/* Category pills */}
                 <div className="flex gap-2 overflow-x-auto pb-3 mb-5">
                     {CATEGORIES.map(c => (
                         <button key={c} onClick={() => setCategory(c)}
                             className={`px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap border
                                 ${category === c
                                     ? 'bg-indigo-600 text-white border-indigo-500 shadow-lg shadow-indigo-600/20'
-                                    : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white hover:border-slate-600'
-                                }`}>
+                                    : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white hover:border-slate-600'}`}>
                             {c}
                         </button>
                     ))}
                 </div>
 
-                {/* Product grid */}
                 {filtered.length === 0 ? (
                     <div className="flex-1 flex flex-col items-center justify-center text-slate-600">
                         <FiPackage size={40} className="mb-3 opacity-30"/>
@@ -466,31 +446,21 @@ const POS = ({ products = [], cart = [], setCart, discounts = [], onCheckoutSucc
                     <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pb-4">
                         {filtered.map(p => {
                             const variants   = safeArr(p.variants);
-                            // ── Use variant stock sum if variants exist, else flat stock ──
                             const totalStock = variants.length > 0
                                 ? variants.reduce((a, v) => a + safeNum(v.stock), 0)
                                 : safeNum(p.totalStock ?? p.stock);
-                            const isOut  = totalStock <= 0;
-                            const isLow  = !isOut && totalStock <= 10;
+                            const isOut      = totalStock <= 0;
+                            const isLow      = !isOut && totalStock <= 10;
                             const availSizes = variants.filter(v => safeNum(v.stock) > 0).map(v => v.size);
-
                             return (
-                                <div
-                                    key={p._id}
-                                    onClick={() => !isOut && openSizeModal(p)}
+                                <div key={p._id} onClick={() => !isOut && openSizeModal(p)}
                                     className={`bg-slate-800 rounded-xl border overflow-hidden group transition-all
-                                        ${isOut
-                                            ? 'opacity-50 cursor-not-allowed border-slate-700'
-                                            : 'cursor-pointer border-slate-700 hover:border-indigo-500 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-indigo-500/10'
-                                        }`}
-                                >
+                                        ${isOut ? 'opacity-50 cursor-not-allowed border-slate-700'
+                                        : 'cursor-pointer border-slate-700 hover:border-indigo-500 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-indigo-500/10'}`}>
                                     <div className="relative h-36 overflow-hidden bg-slate-900">
-                                        <img
-                                            src={safeStr(p.image) || getProductImage(p.name)}
-                                            alt={p.name}
+                                        <img src={safeStr(p.image) || getProductImage(p.name)} alt={p.name}
                                             onError={e => { e.target.onerror = null; e.target.src = getProductImage(p.name); }}
-                                            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                                        />
+                                            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"/>
                                         {isLow && !isOut && <span className="absolute top-2 left-2 bg-orange-500 text-white text-[9px] font-black px-2 py-0.5 rounded-md uppercase">Low</span>}
                                         {isOut            && <span className="absolute top-2 left-2 bg-red-600    text-white text-[9px] font-black px-2 py-0.5 rounded-md uppercase">Out</span>}
                                         {!isOut && (
@@ -525,8 +495,6 @@ const POS = ({ products = [], cart = [], setCart, discounts = [], onCheckoutSucc
 
             {/* ── RIGHT: CART ────────────────────────────────────────────── */}
             <div className="w-96 bg-slate-900 border-l border-slate-800 flex flex-col shadow-2xl">
-
-                {/* Cart header */}
                 <div className="p-5 border-b border-slate-800">
                     <h2 className="text-lg font-black text-white flex items-center gap-2 mb-4">
                         <FiShoppingCart className="text-indigo-500"/> Current Order
@@ -536,22 +504,17 @@ const POS = ({ products = [], cart = [], setCart, discounts = [], onCheckoutSucc
                             </span>
                         )}
                     </h2>
-
-                    {/* Scanner widget */}
                     <div className="bg-slate-950 rounded-xl border border-slate-800 p-3 space-y-2">
                         <div className="flex items-center justify-between">
                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
                                 <BiBarcodeReader className="text-indigo-400" size={13}/> Barcode Scanner
                             </span>
-                            <button
-                                onClick={() => setScannerActive(v => !v)}
+                            <button onClick={() => setScannerActive(v => !v)}
                                 className={`text-[9px] font-black px-2 py-0.5 rounded-md border transition-all
-                                    ${scannerActive ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-slate-800 text-slate-500 border-slate-700'}`}
-                            >
+                                    ${scannerActive ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-slate-800 text-slate-500 border-slate-700'}`}>
                                 {scannerActive ? '● ACTIVE' : '○ OFF'}
                             </button>
                         </div>
-
                         {scanStatus && (
                             <div className={`flex items-center gap-2 p-2 rounded-lg text-[11px] font-bold border
                                 ${scanStatus.type === 'success' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'}`}>
@@ -559,27 +522,16 @@ const POS = ({ products = [], cart = [], setCart, discounts = [], onCheckoutSucc
                                 {scanStatus.msg}
                             </div>
                         )}
-
-                        <form
-                            onSubmit={e => { e.preventDefault(); if (manualSku.trim()) { handleScan(manualSku.trim()); setManualSku(''); } }}
-                            className="flex gap-2"
-                        >
-                            <input
-                                type="text"
-                                value={manualSku}
-                                onChange={e => setManualSku(e.target.value)}
+                        <form onSubmit={e => { e.preventDefault(); if (manualSku.trim()) { handleScan(manualSku.trim()); setManualSku(''); } }} className="flex gap-2">
+                            <input type="text" value={manualSku} onChange={e => setManualSku(e.target.value)}
                                 placeholder="Type SKU or scan barcode..."
-                                className="flex-1 bg-slate-900 border border-slate-700 rounded-lg py-2 px-3 text-white text-xs outline-none focus:border-indigo-500 transition-all font-mono"
-                            />
-                            <button type="submit" className="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition-all">
-                                Add
-                            </button>
+                                className="flex-1 bg-slate-900 border border-slate-700 rounded-lg py-2 px-3 text-white text-xs outline-none focus:border-indigo-500 transition-all font-mono"/>
+                            <button type="submit" className="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition-all">Add</button>
                         </form>
                         {scannerActive && <p className="text-[9px] text-slate-600 text-center">USB scanner ready — scan to add item instantly</p>}
                     </div>
                 </div>
 
-                {/* Cart items */}
                 <div className="flex-1 overflow-y-auto p-4 space-y-2">
                     {cart.length === 0 ? (
                         <div className="h-32 flex flex-col items-center justify-center border-2 border-dashed border-slate-800 rounded-xl text-slate-600">
@@ -595,16 +547,12 @@ const POS = ({ products = [], cart = [], setCart, discounts = [], onCheckoutSucc
                                     <div className="flex items-center gap-2 mt-0.5">
                                         <p className="text-[11px] text-slate-500">Rs.{safeNum(c.price).toFixed(2)}</p>
                                         {c._size && c._size !== 'OS' && (
-                                            <span className="text-[9px] font-black bg-indigo-500/10 text-indigo-400 px-1.5 py-0.5 rounded border border-indigo-500/20">
-                                                {c._size}
-                                            </span>
+                                            <span className="text-[9px] font-black bg-indigo-500/10 text-indigo-400 px-1.5 py-0.5 rounded border border-indigo-500/20">{c._size}</span>
                                         )}
                                     </div>
                                 </div>
-                                <button
-                                    onClick={() => setCart(prev => prev.filter(x => x._cartKey !== c._cartKey))}
-                                    className="text-slate-600 hover:text-red-400 transition-colors p-1 shrink-0"
-                                >
+                                <button onClick={() => setCart(prev => prev.filter(x => x._cartKey !== c._cartKey))}
+                                    className="text-slate-600 hover:text-red-400 transition-colors p-1 shrink-0">
                                     <FiX size={15}/>
                                 </button>
                             </div>
@@ -620,10 +568,7 @@ const POS = ({ products = [], cart = [], setCart, discounts = [], onCheckoutSucc
                     ))}
                 </div>
 
-                {/* Totals + coupon + checkout */}
                 <div className="p-4 border-t border-slate-800 space-y-4">
-
-                    {/* Coupon section */}
                     <div>
                         <button onClick={() => setShowCoupons(v => !v)} className="w-full flex items-center justify-between group mb-2">
                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-2">
@@ -636,7 +581,6 @@ const POS = ({ products = [], cart = [], setCart, discounts = [], onCheckoutSucc
                             </span>
                             <span className="text-[10px] text-slate-600 group-hover:text-slate-400 transition-colors">{showCoupons ? '▲' : '▼'}</span>
                         </button>
-
                         {selectedDiscount && !showCoupons && (
                             <div className="flex items-center justify-between p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/30 mb-2">
                                 <div className="flex items-center gap-2">
@@ -647,7 +591,6 @@ const POS = ({ products = [], cart = [], setCart, discounts = [], onCheckoutSucc
                                 <button onClick={() => setSelectedDiscount(null)} className="text-slate-500 hover:text-red-400 transition-colors"><FiX size={12}/></button>
                             </div>
                         )}
-
                         {showCoupons && (
                             <div className="space-y-1.5 max-h-44 overflow-y-auto pr-0.5">
                                 {discounts.length === 0 ? (
@@ -659,20 +602,15 @@ const POS = ({ products = [], cart = [], setCart, discounts = [], onCheckoutSucc
                                         return bOk - aOk;
                                     })
                                     .map(offer => (
-                                        <CouponOption
-                                            key={offer._id}
-                                            offer={offer}
-                                            subtotal={subtotal}
+                                        <CouponOption key={offer._id} offer={offer} subtotal={subtotal}
                                             selected={selectedDiscount?._id === offer._id}
-                                            onSelect={o => { setSelectedDiscount(prev => prev?._id === o._id ? null : o); setShowCoupons(false); }}
-                                        />
+                                            onSelect={o => { setSelectedDiscount(prev => prev?._id === o._id ? null : o); setShowCoupons(false); }}/>
                                     ))
                                 }
                             </div>
                         )}
                     </div>
 
-                    {/* Totals */}
                     <div className="space-y-2 bg-slate-950 rounded-xl p-4 border border-slate-800">
                         <div className="flex justify-between text-sm text-slate-400">
                             <span>Subtotal</span>
@@ -690,51 +628,126 @@ const POS = ({ products = [], cart = [], setCart, discounts = [], onCheckoutSucc
                         </div>
                     </div>
 
-                    <button
-                        onClick={() => setShowBillModal(true)}
-                        disabled={cart.length === 0}
-                        className="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-3.5 rounded-xl font-black transition-all disabled:opacity-30 disabled:cursor-not-allowed shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2"
-                    >
+                    <button onClick={() => setShowBillModal(true)} disabled={cart.length === 0}
+                        className="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-3.5 rounded-xl font-black transition-all disabled:opacity-30 disabled:cursor-not-allowed shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2">
                         <FiPrinter size={16}/> Checkout — Rs.{finalTotal.toFixed(2)}
                     </button>
                 </div>
             </div>
 
-            {/* ── CUSTOMER DETAILS MODAL ──────────────────────────────────── */}
+            {/* ── CUSTOMER + PAYMENT MODAL ────────────────────────────────── */}
             {showBillModal && (
                 <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 z-[150]">
-                    <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md p-7 shadow-2xl">
-                        <div className="flex justify-between items-center mb-7">
+                    <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden max-h-[95vh] overflow-y-auto">
+
+                        {/* Modal header */}
+                        <div className="sticky top-0 bg-slate-900 border-b border-slate-800 px-7 pt-6 pb-4 flex justify-between items-center z-10">
                             <div>
                                 <h2 className="text-2xl font-black text-white">Billing Info</h2>
-                                <p className="text-slate-500 text-xs mt-0.5">Enter customer details to complete sale</p>
+                                <p className="text-slate-500 text-xs mt-0.5">Complete customer details to finish sale</p>
                             </div>
                             <button onClick={() => setShowBillModal(false)} className="bg-slate-800 p-2 rounded-xl hover:text-red-400 transition-colors"><FiX size={18}/></button>
                         </div>
-                        <form onSubmit={handleCheckout} className="space-y-4">
-                            <div className="space-y-1">
-                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Customer Name *</label>
-                                <input type="text" required placeholder="John Doe"
-                                    className="w-full bg-slate-800 border border-slate-700 p-3.5 rounded-xl outline-none focus:border-indigo-500 text-white transition-colors"
-                                    value={customer.name} onChange={e => setCustomer({...customer, name: e.target.value})}/>
+
+                        <form onSubmit={handleCheckout} className="px-7 pb-7 pt-5 space-y-5">
+
+                            {/* Customer fields */}
+                            <div className="space-y-4">
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Customer Name *</label>
+                                    <input type="text" required placeholder="John Doe"
+                                        className="w-full bg-slate-800 border border-slate-700 p-3.5 rounded-xl outline-none focus:border-indigo-500 text-white transition-colors"
+                                        value={customer.name} onChange={e => setCustomer({...customer, name: e.target.value})}/>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Phone Number *</label>
+                                    <input type="text" required placeholder="10-digit number" maxLength="10"
+                                        className="w-full bg-slate-800 border border-slate-700 p-3.5 rounded-xl outline-none focus:border-indigo-500 text-white transition-colors"
+                                        value={customer.phone} onChange={e => { if (/^\d{0,10}$/.test(e.target.value)) setCustomer({...customer, phone: e.target.value}); }}/>
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider">City *</label>
+                                        <input type="text" required placeholder="City"
+                                            className="w-full bg-slate-800 border border-slate-700 p-3.5 rounded-xl outline-none focus:border-indigo-500 text-white transition-colors"
+                                            value={customer.city} onChange={e => setCustomer({...customer, city: e.target.value})}/>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Address</label>
+                                        <input type="text" placeholder="Optional"
+                                            className="w-full bg-slate-800 border border-slate-700 p-3.5 rounded-xl outline-none focus:border-indigo-500 text-white transition-colors"
+                                            value={customer.address} onChange={e => setCustomer({...customer, address: e.target.value})}/>
+                                    </div>
+                                </div>
                             </div>
-                            <div className="space-y-1">
-                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Phone Number *</label>
-                                <input type="text" required placeholder="10-digit number" maxLength="10"
-                                    className="w-full bg-slate-800 border border-slate-700 p-3.5 rounded-xl outline-none focus:border-indigo-500 text-white transition-colors"
-                                    value={customer.phone} onChange={e => { if (/^\d{0,10}$/.test(e.target.value)) setCustomer({...customer, phone: e.target.value}); }}/>
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider">City *</label>
-                                <input type="text" required placeholder="City"
-                                    className="w-full bg-slate-800 border border-slate-700 p-3.5 rounded-xl outline-none focus:border-indigo-500 text-white transition-colors"
-                                    value={customer.city} onChange={e => setCustomer({...customer, city: e.target.value})}/>
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Address (Optional)</label>
-                                <textarea placeholder="Street details..." rows="2"
-                                    className="w-full bg-slate-800 border border-slate-700 p-3.5 rounded-xl outline-none focus:border-indigo-500 text-white resize-none transition-colors"
-                                    value={customer.address} onChange={e => setCustomer({...customer, address: e.target.value})}/>
+
+                            {/* ── PAYMENT METHOD SELECTOR ─────────────────────────────────
+                                This is the fix. Staff must explicitly choose how the
+                                customer is paying before the sale can be completed.
+                                Selection is stored in paymentMethod state and sent to backend.
+                            ─────────────────────────────────────────────────────────── */}
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                                    Payment Method *
+                                </label>
+                                <div className="grid grid-cols-3 gap-3">
+                                    {PAYMENT_METHODS.map(pm => {
+                                        const isSelected = paymentMethod === pm.key;
+                                        return (
+                                            <button
+                                                key={pm.key}
+                                                type="button"
+                                                onClick={() => setPaymentMethod(pm.key)}
+                                                style={{
+                                                    background:  isSelected ? pm.bg   : 'rgba(15,23,42,0.8)',
+                                                    border:      `2px solid ${isSelected ? pm.color : 'rgba(51,65,85,0.8)'}`,
+                                                    boxShadow:   isSelected ? `0 0 16px ${pm.ring}` : 'none',
+                                                    borderRadius: '14px',
+                                                    padding:     '14px 8px',
+                                                    display:     'flex',
+                                                    flexDirection:'column',
+                                                    alignItems:  'center',
+                                                    gap:         '8px',
+                                                    cursor:      'pointer',
+                                                    transition:  'all 0.18s ease',
+                                                    transform:   isSelected ? 'translateY(-1px)' : 'none',
+                                                }}
+                                            >
+                                                {/* Icon */}
+                                                <div style={{
+                                                    width: '36px', height: '36px', borderRadius: '10px',
+                                                    background: isSelected ? pm.bg : 'rgba(30,41,59,1)',
+                                                    border: `1px solid ${isSelected ? pm.color : 'rgba(51,65,85,1)'}`,
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                    color: isSelected ? pm.color : '#64748b',
+                                                }}>
+                                                    {pm.icon}
+                                                </div>
+                                                <span style={{
+                                                    fontSize: '12px', fontWeight: 800,
+                                                    color: isSelected ? pm.color : '#94a3b8',
+                                                    letterSpacing: '0.02em',
+                                                }}>
+                                                    {pm.label}
+                                                </span>
+                                                <span style={{
+                                                    fontSize: '9px', fontWeight: 600,
+                                                    color: isSelected ? pm.color : '#475569',
+                                                    textAlign: 'center', lineHeight: 1.3,
+                                                }}>
+                                                    {pm.desc}
+                                                </span>
+                                                {isSelected && (
+                                                    <div style={{
+                                                        width: '6px', height: '6px', borderRadius: '50%',
+                                                        background: pm.color,
+                                                        boxShadow: `0 0 6px ${pm.color}`,
+                                                    }}/>
+                                                )}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
                             </div>
 
                             {/* Order summary */}
@@ -746,6 +759,10 @@ const POS = ({ products = [], cart = [], setCart, discounts = [], onCheckoutSucc
                                 <div className="text-right text-xs text-slate-400">
                                     <p>{cartItemCount} items</p>
                                     {discountAmount > 0 && <p className="text-emerald-400">Saved: Rs.{discountAmount.toFixed(2)}</p>}
+                                    {/* Show selected payment method */}
+                                    <p style={{ color: PAYMENT_METHODS.find(p => p.key === paymentMethod)?.color || '#94a3b8', fontWeight: 700, marginTop: '2px' }}>
+                                        via {PAYMENT_METHODS.find(p => p.key === paymentMethod)?.label}
+                                    </p>
                                 </div>
                             </div>
 
