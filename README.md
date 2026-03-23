@@ -106,4 +106,4 @@ npm run dev
 ## 👨‍💻 Developer
 
 **Dhruvil Talaviya**
-[![GitHub](https://img.shields.io/badge/GitHub-dhruviltalaviya-black?logo=github)](https://github.com/dhruviltalaviya)
+[![GitHub](https://img.shields.io/badge/GitHub-dhruvil--talaviya-black?logo=github)](https://github.com/dhruvil-talaviya)
