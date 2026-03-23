@@ -2,6 +2,9 @@ import React, { useState, useEffect, useCallback, useRef, createContext, useCont
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import axios from 'axios';
 
+// ✅ GLOBAL FIX
+axios.defaults.withCredentials = true;
+
 import Login          from './pages/Login';
 import AdminDashboard from './pages/Admin/AdminDashboard';
 import StaffDashboard from './pages/StaffDashboard';
@@ -101,57 +104,76 @@ function AppRoutes() {
     const [status,       setStatus]       = useState(() => getUser() ? 'valid' : 'invalid');
     const [accessToken,  setAccessToken]  = useState(null);
 
-    // ── FIX 1: store doRefresh in a ref so the useEffect never re-runs ────────
-    // useEffect([doRefresh]) was re-running every render because useCallback
-    // was recreating doRefresh on every status/authUser change → stacking intervals
-    const refreshingRef = useRef(false);  // FIX 2: guard against concurrent calls
-    const intervalRef   = useRef(null);   // FIX 3: stable interval handle
+    const refreshingRef = useRef(false);
+    const intervalRef   = useRef(null);
 
     const doRefresh = useCallback(async () => {
-        // FIX 2: if a refresh is already in-flight, skip — stops the flood
-        if (refreshingRef.current) return null;
+
+        // ✅ DO NOT RUN ON LOGIN PAGE
+        if (window.location.pathname === "/") {
+            return null;
+        }
+
+        // ✅ Prevent multiple calls
+        if (refreshingRef.current) {
+            console.log("⏳ Refresh already running...");
+            return null;
+        }
+
         refreshingRef.current = true;
+
         try {
+            console.log("🍪 Sending refresh request...");
+
             const res = await axios.post(
                 `${API}/api/auth/refresh`,
                 {},
                 { withCredentials: true }
             );
+
             const savedUser = getUser();
             const user = { ...savedUser, role: res.data.role };
+
             setAccessToken(res.data.token);
             setAuthUser(user);
             setStatus('valid');
+
             if (savedUser) saveUser(user);
+
             return res.data.token;
-        } catch {
-            // Only kick to login if localStorage is also empty —
-            // a temporary server hiccup shouldn't log the user out.
-            if (!getUser()) {
-                clearAuth();
-                setAccessToken(null);
-                setAuthUser(null);
-                setStatus('invalid');
+
+        } catch (err) {
+            console.log("❌ Refresh failed:", err?.response?.status);
+
+            clearAuth();
+            setAccessToken(null);
+            setAuthUser(null);
+            setStatus('invalid');
+
+            // ✅ FIX: avoid infinite reload loop
+            if (window.location.pathname !== "/") {
+                window.location.href = "/";
             }
+
             return null;
+
         } finally {
-            // FIX 2: always release the guard
             refreshingRef.current = false;
         }
-    }, []); // ← FIX 1: empty deps — function identity never changes
+
+    }, []);
 
     useEffect(() => {
-        // FIX 3: clear any leftover interval before starting a new one
         clearInterval(intervalRef.current);
 
         doRefresh().then((token) => {
             if (!token) return;
-            // Auto-refresh every 14 min
+
             intervalRef.current = setInterval(doRefresh, 14 * 60 * 1000);
         });
 
         return () => clearInterval(intervalRef.current);
-    }, []); // ← FIX 1: empty deps — runs exactly ONCE on mount, never again
+    }, []);
 
     return (
         <AuthContext.Provider value={{

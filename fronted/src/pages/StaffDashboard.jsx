@@ -555,22 +555,57 @@ const StaffDashboard = () => {
 
     const notify = useCallback((text, type='success')=>{ setToast({text,type}); setTimeout(()=>setToast(null),3000); },[]);
 
-    const fetchData = useCallback(async ()=>{
-        const userId=user?.id||user?._id; if (!userId) return;
-        const [pR,sR,hR,oR,eR] = await Promise.allSettled([
+    const fetchData = useCallback(async () => {
+        const userId = user?.id || user?._id;
+        if (!userId) return;
+    
+        const [pR, sR, hR, oR, eR] = await Promise.allSettled([
             axios.get('http://localhost:5001/api/staff/products'),
             axios.get(`http://localhost:5001/api/staff/daily-stats/${userId}`),
             axios.get(`http://localhost:5001/api/staff/history/${userId}`),
             axios.get('http://localhost:5001/api/admin/discounts'),
             axios.get('http://localhost:5001/api/admin/events'),
         ]);
-        if (pR.status==='fulfilled') setProducts(safeArr(pR.value.data).filter(p=>p.isAvailable!==false));
-        if (sR.status==='fulfilled') setStats({revenue:safeNum(sR.value.data?.revenue),count:safeNum(sR.value.data?.count)});
-        if (hR.status==='fulfilled') setSalesHistory(safeArr(hR.value.data));
-        if (oR.status==='fulfilled') setActiveOffers(safeArr(oR.value.data).filter(o=>o.isActive));
-        if (eR.status==='fulfilled') setEvents(safeArr(eR.value.data));
-    },[user]);
-
+    
+        // ✅ Products
+        if (pR.status === 'fulfilled') {
+            setProducts(
+                safeArr(pR.value.data).filter(p => p.isAvailable !== false)
+            );
+        }
+    
+        // ✅ Stats
+        if (sR.status === 'fulfilled') {
+            setStats({
+                revenue: safeNum(sR.value.data?.revenue),
+                count: safeNum(sR.value.data?.count),
+            });
+        }
+    
+        // ✅ History
+        if (hR.status === 'fulfilled') {
+            setSalesHistory(safeArr(hR.value.data));
+        }
+    
+        // 🔥 ✅ UPDATED COUPON FILTER (EXPIRED HIDE FIX)
+        // ✅ FIX — replaces the old one-liner
+if (oR.status==='fulfilled') {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    setActiveOffers(
+        safeArr(oR.value.data).filter(o =>
+            o.isActive &&
+            (!o.validUntil || new Date(o.validUntil) >= today)
+        )
+    );
+}
+    
+        // ✅ Events
+        if (eR.status === 'fulfilled') {
+            setEvents(safeArr(eR.value.data));
+        }
+    
+    }, [user]);
     useEffect(()=>{
         const clock=setInterval(()=>setCurrentTime(new Date()),1000);
         fetchData();

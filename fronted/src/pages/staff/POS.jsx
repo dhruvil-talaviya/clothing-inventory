@@ -237,8 +237,17 @@ const POS = ({ products = [], cart = [], setCart, discounts = [], onCheckoutSucc
 
     // ── Customer + payment state ──────────────────────────────────────────────
     const [customer, setCustomer] = useState({ name: '', phone: '', address: '', city: '' });
-    // ✅ FIX: paymentMethod is now tracked in state — default 'cash'
     const [paymentMethod, setPaymentMethod] = useState('cash');
+
+    // ✅ FIX: Filter out expired coupons — staff can never see or apply them
+    const activeDiscounts = useMemo(() => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        return discounts.filter(offer => {
+            if (!offer.validUntil) return true; // no expiry date = always valid
+            return new Date(offer.validUntil) >= today;
+        });
+    }, [discounts]);
 
     // ── SCAN RESOLVER ─────────────────────────────────────────────────────────
     const resolveScan = useCallback((sku) => {
@@ -341,9 +350,11 @@ const POS = ({ products = [], cart = [], setCart, discounts = [], onCheckoutSucc
 
     const finalTotal    = Math.max(0, subtotal - discountAmount);
     const cartItemCount = useMemo(() => cart.reduce((a, i) => a + safeNum(i.qty, 1), 0), [cart]);
+
+    // ✅ FIX: uses activeDiscounts (expired coupons excluded)
     const eligibleCount = useMemo(() =>
-        discounts.filter(o => subtotal >= safeNum(o.minOrder || o.minOrderValue)).length
-    , [discounts, subtotal]);
+        activeDiscounts.filter(o => subtotal >= safeNum(o.minOrder || o.minOrderValue)).length
+    , [activeDiscounts, subtotal]);
 
     useEffect(() => {
         if (!selectedDiscount) return;
@@ -365,7 +376,6 @@ const POS = ({ products = [], cart = [], setCart, discounts = [], onCheckoutSucc
         const userInfo = (() => { try { return JSON.parse(localStorage.getItem('user')) || null; } catch { return null; } })();
         if (!userInfo) return alert('Session Expired. Please Login.');
 
-        // ✅ FIX: paymentMethod is now always explicitly set from state
         const saleData = {
             items: cart.map(item => ({
                 productId: item.productId || item._id,
@@ -382,7 +392,7 @@ const POS = ({ products = [], cart = [], setCart, discounts = [], onCheckoutSucc
             subtotal,
             discount:        discountAmount,
             totalAmount:     finalTotal,
-            paymentMethod,          // ✅ always 'cash' | 'upi' | 'card'
+            paymentMethod,
             soldBy:    userInfo._id        || userInfo.id,
             staffId:   userInfo.employeeId || userInfo.staffId || 'N/A',
             staffName: userInfo.name       || userInfo.username || 'Staff',
@@ -398,7 +408,7 @@ const POS = ({ products = [], cart = [], setCart, discounts = [], onCheckoutSucc
             setShowBillModal(false);
             setSelectedDiscount(null);
             setCustomer({ name: '', phone: '', address: '', city: '' });
-            setPaymentMethod('cash'); // reset to default
+            setPaymentMethod('cash');
         } catch (err) {
             console.error('Checkout Error:', err.response?.data);
             alert(`⚠️ Error: ${err.response?.data?.message || 'Transaction Failed'}`);
@@ -573,9 +583,10 @@ const POS = ({ products = [], cart = [], setCart, discounts = [], onCheckoutSucc
                         <button onClick={() => setShowCoupons(v => !v)} className="w-full flex items-center justify-between group mb-2">
                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-2">
                                 <FiTag className="text-indigo-400" size={12}/> Apply Coupon
-                                {discounts.length > 0 && (
+                                {/* ✅ FIX: badge now uses activeDiscounts count */}
+                                {activeDiscounts.length > 0 && (
                                     <span className={`px-1.5 py-0.5 rounded-full text-[8px] font-black ${eligibleCount > 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-700 text-slate-500'}`}>
-                                        {eligibleCount}/{discounts.length} eligible
+                                        {eligibleCount}/{activeDiscounts.length} eligible
                                     </span>
                                 )}
                             </span>
@@ -593,9 +604,10 @@ const POS = ({ products = [], cart = [], setCart, discounts = [], onCheckoutSucc
                         )}
                         {showCoupons && (
                             <div className="space-y-1.5 max-h-44 overflow-y-auto pr-0.5">
-                                {discounts.length === 0 ? (
+                                {/* ✅ FIX: renders activeDiscounts — expired coupons never appear */}
+                                {activeDiscounts.length === 0 ? (
                                     <p className="text-xs text-slate-600 text-center py-3">No active offers</p>
-                                ) : [...discounts]
+                                ) : [...activeDiscounts]
                                     .sort((a, b) => {
                                         const aOk = subtotal >= safeNum(a.minOrder || a.minOrderValue);
                                         const bOk = subtotal >= safeNum(b.minOrder || b.minOrderValue);
@@ -640,7 +652,6 @@ const POS = ({ products = [], cart = [], setCart, discounts = [], onCheckoutSucc
                 <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 z-[150]">
                     <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden max-h-[95vh] overflow-y-auto">
 
-                        {/* Modal header */}
                         <div className="sticky top-0 bg-slate-900 border-b border-slate-800 px-7 pt-6 pb-4 flex justify-between items-center z-10">
                             <div>
                                 <h2 className="text-2xl font-black text-white">Billing Info</h2>
@@ -651,7 +662,6 @@ const POS = ({ products = [], cart = [], setCart, discounts = [], onCheckoutSucc
 
                         <form onSubmit={handleCheckout} className="px-7 pb-7 pt-5 space-y-5">
 
-                            {/* Customer fields */}
                             <div className="space-y-4">
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Customer Name *</label>
@@ -681,11 +691,6 @@ const POS = ({ products = [], cart = [], setCart, discounts = [], onCheckoutSucc
                                 </div>
                             </div>
 
-                            {/* ── PAYMENT METHOD SELECTOR ─────────────────────────────────
-                                This is the fix. Staff must explicitly choose how the
-                                customer is paying before the sale can be completed.
-                                Selection is stored in paymentMethod state and sent to backend.
-                            ─────────────────────────────────────────────────────────── */}
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
                                     Payment Method *
@@ -713,7 +718,6 @@ const POS = ({ products = [], cart = [], setCart, discounts = [], onCheckoutSucc
                                                     transform:   isSelected ? 'translateY(-1px)' : 'none',
                                                 }}
                                             >
-                                                {/* Icon */}
                                                 <div style={{
                                                     width: '36px', height: '36px', borderRadius: '10px',
                                                     background: isSelected ? pm.bg : 'rgba(30,41,59,1)',
@@ -750,7 +754,6 @@ const POS = ({ products = [], cart = [], setCart, discounts = [], onCheckoutSucc
                                 </div>
                             </div>
 
-                            {/* Order summary */}
                             <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-4 flex justify-between items-center">
                                 <div>
                                     <p className="text-[10px] text-indigo-300 font-black uppercase tracking-wider">Grand Total</p>
@@ -759,7 +762,6 @@ const POS = ({ products = [], cart = [], setCart, discounts = [], onCheckoutSucc
                                 <div className="text-right text-xs text-slate-400">
                                     <p>{cartItemCount} items</p>
                                     {discountAmount > 0 && <p className="text-emerald-400">Saved: Rs.{discountAmount.toFixed(2)}</p>}
-                                    {/* Show selected payment method */}
                                     <p style={{ color: PAYMENT_METHODS.find(p => p.key === paymentMethod)?.color || '#94a3b8', fontWeight: 700, marginTop: '2px' }}>
                                         via {PAYMENT_METHODS.find(p => p.key === paymentMethod)?.label}
                                     </p>

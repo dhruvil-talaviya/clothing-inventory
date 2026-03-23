@@ -1,15 +1,3 @@
-/**
- * utils/sendBillEmail.js
- * Clean table-based HTML invoice email — no overlapping, email-client safe.
- * Requires: npm install nodemailer
- *
- * .env:
- *   MAIL_HOST=smtp.gmail.com
- *   MAIL_PORT=587
- *   MAIL_USER=your@gmail.com
- *   MAIL_PASS=your_16char_app_password
- *   MAIL_FROM="StyleSync <your@gmail.com>"
- */
 
 const nodemailer = require('nodemailer');
 
