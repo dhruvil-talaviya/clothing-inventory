@@ -1,5 +1,5 @@
 // utils/otp.js
-const axios = require('axios');
+const twilio = require('twilio');
 
 const otpStore = new Map(); // { phone: { otp, expiresAt, attempts } }
 
@@ -27,50 +27,26 @@ async function sendOTP(phone) {
     // ── Always log OTP to console so you can test even if SMS fails ───────────
     console.log(`\n🔐 OTP for ${cleanPhone}: ${otp} (valid 5 min)\n`);
 
-    // ── Try Fast2SMS — if it fails, still succeed (OTP is in console) ─────────
-    if (!process.env.FAST2SMS_API_KEY) {
-        console.warn('⚠️  FAST2SMS_API_KEY not set — OTP only in console (dev mode)');
+    // ── Twilio SMS ────────────────────────────────────────────────────────────
+    if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN || !process.env.TWILIO_PHONE_NUMBER) {
+        console.warn('⚠️  Twilio env vars not set — OTP only in console (dev mode)');
         return { success: true, message: 'OTP generated (console only)' };
     }
 
     try {
-        const response = await axios.get('https://www.fast2sms.com/dev/bulkV2', {
-            params: {
-                authorization: process.env.FAST2SMS_API_KEY,
-                message:       `Your StyleSync verification code is ${otp}. Valid for 5 minutes. Do not share with anyone.`,
-                route:         'q',
-                numbers:       cleanPhone,
-            },
-            timeout: 10000,
+        const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+
+        const message = await client.messages.create({
+            body: `Your verification code is ${otp}. Valid for 5 minutes. Do not share with anyone.`,
+            from: process.env.TWILIO_PHONE_NUMBER,
+            to:   `+91${cleanPhone}`, // Indian number
         });
 
-        console.log('📨 Fast2SMS raw response:', JSON.stringify(response.data));
-
-        if (response.data?.return === true) {
-            console.log(`✅ SMS sent to ${cleanPhone}`);
-        } else {
-            // SMS failed but OTP is stored — user can still get code from console in dev
-            console.warn('⚠️  Fast2SMS did not return success:', JSON.stringify(response.data));
-            // In production you'd throw here; for now we let it pass so dev can still test
-        }
-
-        return response.data;
+        console.log(`✅ SMS sent to ${cleanPhone} | SID: ${message.sid}`);
+        return { success: true, sid: message.sid };
 
     } catch (err) {
-        // Log details but DO NOT delete OTP from store — let user verify via console
-        if (err.response) {
-            console.error('❌ Fast2SMS HTTP', err.response.status, JSON.stringify(err.response.data));
-        } else if (err.request) {
-            console.error('❌ Fast2SMS — no response (network/timeout)');
-        } else {
-            console.error('❌ Fast2SMS error:', err.message);
-        }
-
-        // ── IMPORTANT: In dev/test, don't crash — OTP is still valid in memory ──
-        // Comment out the throw below once SMS is working, keep it for production
-        // throw new Error('Failed to send SMS. OTP is logged to server console.');
-
-        // For now: silently succeed so you can test the full flow
+        console.error('❌ Twilio error:', err.message);
         console.warn('⚠️  SMS failed — use the OTP printed above to test.');
         return { success: true, message: 'OTP generated (SMS failed — check server console)' };
     }

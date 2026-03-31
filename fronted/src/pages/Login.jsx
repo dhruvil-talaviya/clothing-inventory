@@ -1,7 +1,6 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { Turnstile } from '@marsidev/react-turnstile';
 import {
     FiUser, FiLock, FiEye, FiEyeOff, FiCheck,
     FiArrowRight, FiShield, FiRefreshCw, FiPhone
@@ -9,7 +8,89 @@ import {
 import { useAuth } from '../App';
 
 const API = 'http://localhost:5001';
-const TURNSTILE_SITE_KEY = '0x4AAAAAACtS3omXtqAvAcR0';
+
+// ─── Checkbox Captcha ─────────────────────────────────────────────────────────
+const CheckboxCaptcha = ({ onVerify }) => {
+    const [state, setState] = useState('idle'); // idle | loading | verified
+    const timeoutRef = useRef(null);
+
+    useEffect(() => () => clearTimeout(timeoutRef.current), []);
+
+    const handleClick = () => {
+        if (state === 'verified' || state === 'loading') return;
+        setState('loading');
+        onVerify(false);
+        timeoutRef.current = setTimeout(() => {
+            setState('verified');
+            onVerify(true);
+        }, 1200);
+    };
+
+    const reset = (e) => {
+        e.stopPropagation();
+        clearTimeout(timeoutRef.current);
+        setState('idle');
+        onVerify(false);
+    };
+
+    return (
+        <div
+            onClick={handleClick}
+            className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl border-2 transition-all select-none
+                ${state === 'verified'
+                    ? 'bg-emerald-500/10 border-emerald-500/40 cursor-default'
+                    : state === 'loading'
+                    ? 'bg-slate-800/60 border-slate-600 cursor-wait'
+                    : 'bg-slate-950/50 border-slate-700 hover:border-indigo-500/60 cursor-pointer active:scale-[0.99]'}`}>
+
+            {/* Left — checkbox + label */}
+            <div className="flex items-center gap-3">
+                <div className={`w-5 h-5 rounded flex items-center justify-center border-2 transition-all shrink-0
+                    ${state === 'verified'
+                        ? 'bg-emerald-500 border-emerald-500'
+                        : state === 'loading'
+                        ? 'border-indigo-400 bg-slate-900'
+                        : 'border-slate-500 bg-slate-900 group-hover:border-indigo-400'}`}>
+                    {state === 'loading' && (
+                        <span className="w-3 h-3 border-2 border-indigo-400/30 border-t-indigo-400 rounded-full animate-spin"/>
+                    )}
+                    {state === 'verified' && (
+                        <FiCheck size={12} className="text-white" strokeWidth={3}/>
+                    )}
+                </div>
+
+                <span className={`text-sm font-semibold transition-colors
+                    ${state === 'verified' ? 'text-emerald-400' : state === 'loading' ? 'text-slate-400' : 'text-slate-300'}`}>
+                    {state === 'verified' ? "You're verified!" : state === 'loading' ? 'Verifying...' : "I'm not a robot"}
+                </span>
+            </div>
+
+            {/* Right — robot icon or reset */}
+            <div className="flex flex-col items-center gap-1 shrink-0">
+                {state === 'verified' ? (
+                    <button type="button" onClick={reset}
+                        className="text-[10px] text-slate-500 hover:text-slate-300 underline transition-colors leading-none">
+                        reset
+                    </button>
+                ) : (
+                    <div className="opacity-25">
+                        <svg width="32" height="32" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <rect x="8" y="14" width="24" height="18" rx="3" fill="#818cf8"/>
+                            <rect x="14" y="19" width="5" height="5" rx="1.5" fill="white"/>
+                            <rect x="21" y="19" width="5" height="5" rx="1.5" fill="white"/>
+                            <rect x="16" y="27" width="8" height="2" rx="1" fill="white"/>
+                            <rect x="18" y="8" width="4" height="7" rx="2" fill="#818cf8"/>
+                            <circle cx="20" cy="8" r="2" fill="#818cf8"/>
+                            <rect x="3" y="18" width="5" height="8" rx="2.5" fill="#818cf8"/>
+                            <rect x="32" y="18" width="5" height="8" rx="2.5" fill="#818cf8"/>
+                        </svg>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+// ─────────────────────────────────────────────────────────────────────────────
 
 const Login = () => {
     const navigate = useNavigate();
@@ -17,13 +98,11 @@ const Login = () => {
 
     const [mode, setMode] = useState('login');
 
-    const [loginId,      setLoginId]      = useState('');
-    const [password,     setPassword]     = useState('');
-    const [showPassword, setShowPassword] = useState(false);
-
-    const [turnstileToken, setTurnstileToken] = useState('');
-    const [captchaStatus,  setCaptchaStatus]  = useState('idle');
-    const turnstileRef = useRef(null);
+    const [loginId,       setLoginId]       = useState('');
+    const [password,      setPassword]      = useState('');
+    const [showPassword,  setShowPassword]  = useState(false);
+    const [captchaPassed, setCaptchaPassed] = useState(false);
+    const [captchaKey,    setCaptchaKey]    = useState(0);
 
     const [forgotStep,  setForgotStep]  = useState('phone');
     const [forgotPhone, setForgotPhone] = useState('');
@@ -47,16 +126,16 @@ const Login = () => {
     };
 
     const resetCaptcha = () => {
-        turnstileRef.current?.reset();
-        setTurnstileToken('');
-        setCaptchaStatus('idle');
+        setCaptchaPassed(false);
+        setCaptchaKey(k => k + 1);
     };
 
     const switchMode = (m) => {
         setMode(m); setError(''); setSuccess('');
-        setForgotStep('phone'); setForgotPhone(''); setForgotOtp(['','','','','','']);
+        setForgotStep('phone'); setForgotPhone('');
+        setForgotOtp(['','','','','','']);
         setNewPw(''); setConfirmPw('');
-        if (m === 'login') resetCaptcha();
+        resetCaptcha();
     };
 
     // ── LOGIN ─────────────────────────────────────────────────────────────────
@@ -64,25 +143,22 @@ const Login = () => {
         e.preventDefault();
         if (!loginId.trim()) { setError('Enter your Staff ID or Admin ID.'); return; }
         if (!password)       { setError('Enter your password.'); return; }
-        if (!turnstileToken) { setError('Please wait for security check to complete.'); return; }
+        if (!captchaPassed)  { setError('Please complete the security check first.'); return; }
 
         setLoading(true); setError('');
         try {
             const res = await axios.post(
                 `${API}/api/auth/login`,
-                { loginId: loginId.trim(), password, cfToken: turnstileToken },
+                { loginId: loginId.trim(), password },
                 { withCredentials: true }
             );
             const { user, token } = res.data;
 
-            // Update shared auth context synchronously BEFORE navigating.
-            // This ensures PublicRoute sees status='valid' and doesn't block the render.
             setAccessToken(token);
             setAuthUser(user);
-            setStatus('valid');   // ← key fix: PublicRoute reads this immediately
+            setStatus('valid');
             saveUser(user);
 
-            // Now navigate — route guards will allow through instantly
             if (user.role === 'admin') {
                 navigate('/admin/dashboard', { replace: true });
             } else if (user.isFirstLogin === true) {
@@ -169,7 +245,7 @@ const Login = () => {
             <div className="relative z-10 w-full max-w-md p-8 bg-slate-900/60 backdrop-blur-xl border border-slate-700/50 rounded-3xl shadow-2xl">
                 <div className="text-center mb-8">
                     <h1 className="text-3xl font-extrabold text-white tracking-tight">
-                        StyleSync <span className="text-indigo-400">OS</span>
+                        StyleSync <span className="text-indigo-400">System</span>
                     </h1>
                     <p className="text-slate-400 text-sm mt-2">
                         {mode === 'login' ? 'Sign in to your account' : 'Reset your password'}
@@ -229,34 +305,16 @@ const Login = () => {
                             </button>
                         </p>
 
-                        <div className="flex flex-col items-center gap-2 py-1">
-                            <Turnstile ref={turnstileRef} siteKey={TURNSTILE_SITE_KEY}
-                                onSuccess={(token) => { setTurnstileToken(token); setCaptchaStatus('success'); setError(''); }}
-                                onError={() => { setTurnstileToken(''); setCaptchaStatus('error'); setError('Security check failed. Please try again.'); }}
-                                onExpire={() => { setTurnstileToken(''); setCaptchaStatus('idle'); turnstileRef.current?.reset(); }}
-                                options={{ theme:'dark', appearance:'always', execution:'render' }}
-                            />
-                            {captchaStatus === 'idle' && (
-                                <div className="flex items-center gap-2 text-[11px] text-slate-500">
-                                    <span className="w-2 h-2 rounded-full bg-slate-600 animate-pulse"/> Running security check...
-                                </div>
-                            )}
-                            {captchaStatus === 'success' && (
-                                <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 font-bold">
-                                    <FiCheck size={12}/> Security check passed
-                                </div>
-                            )}
-                            {captchaStatus === 'error' && (
-                                <button type="button" onClick={resetCaptcha} className="flex items-center gap-1.5 text-[11px] text-red-400 underline">
-                                    <FiRefreshCw size={11}/> Retry security check
-                                </button>
-                            )}
+                        {/* ── Checkbox Captcha ── */}
+                        <div className="space-y-1">
+                            <label className={lCls}>Security Check</label>
+                            <CheckboxCaptcha key={captchaKey} onVerify={setCaptchaPassed}/>
                         </div>
 
                         {error && <ErrorBox msg={error}/>}
 
-                        <button type="submit" disabled={loading || !turnstileToken}
-                            className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all">
+                        <button type="submit" disabled={loading || !captchaPassed}
+                            className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all">
                             {loading ? <Spinner/> : <><FiArrowRight size={16}/> Sign In</>}
                         </button>
                     </form>

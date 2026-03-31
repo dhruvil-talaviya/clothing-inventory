@@ -6,9 +6,6 @@ const jwt        = require('jsonwebtoken');
 const { User }   = require('../models/Schemas');
 const { sendOTP, verifyOTP } = require('../utils/otp');
 
-// ─── CLOUDFLARE TURNSTILE ─────────────────────────────────────────────────────
-const TURNSTILE_SECRET_KEY = process.env.TURNSTILE_SECRET_KEY || '0x4AAAAAACtS3kFOFyA6w260Fj5_qPGk0Wc';
-
 // ─── JWT SECRETS ──────────────────────────────────────────────────────────────
 const ACCESS_SECRET  = process.env.JWT_SECRET         || 'inventory_secret';
 const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'inventory_refresh_secret';
@@ -22,15 +19,13 @@ const signRefresh = (id) =>
 
 const setRefreshCookie = (res, token) =>
     res.cookie('refreshToken', token, {
-        httpOnly: true,   // JS cannot read — XSS safe
-        secure:   false,  // must be false for localhost (no HTTPS in dev)
-        sameSite: 'lax',  // 'strict' blocks cookies across ports in dev (5173→5001)
-        maxAge:   7 * 24 * 60 * 60 * 1000, // 7 days in ms
+        httpOnly: true,
+        secure:   false,  // false for localhost (no HTTPS in dev)
+        sameSite: 'lax',
+        maxAge:   7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
 // ─── VALIDATE ─────────────────────────────────────────────────────────────────
-// Called by ProtectedRoute on every protected page load.
-// Access token expires in 15m — frontend silently refreshes before that.
 router.get('/validate', async (req, res) => {
     try {
         const authHeader = req.headers.authorization;
@@ -51,8 +46,6 @@ router.get('/validate', async (req, res) => {
 });
 
 // ─── REFRESH ──────────────────────────────────────────────────────────────────
-// Silently called every 14 min by the frontend to get a new access token.
-// On server restart, all refreshTokens in DB are wiped → returns 401 → forces login.
 router.post('/refresh', async (req, res) => {
     try {
         const token = req.cookies?.refreshToken;
@@ -65,8 +58,6 @@ router.post('/refresh', async (req, res) => {
         if (!user || user.isActive === false)
             return res.status(401).json({ message: 'Account inactive or not found.' });
 
-        // KEY CHECK: server.js wipes all refreshToken fields on restart.
-        // So this comparison fails after restart → 401 → frontend goes to login.
         if (user.refreshToken !== token)
             return res.status(401).json({ message: 'Session expired. Please log in again.' });
 
@@ -95,34 +86,17 @@ router.post('/logout', async (req, res) => {
 });
 
 // ─── LOGIN ────────────────────────────────────────────────────────────────────
+// NOTE: Cloudflare Turnstile removed — captcha is now handled client-side
+//       via a local math captcha (no token needed server-side).
 router.post('/login', async (req, res) => {
     try {
         const inputId   = req.body.phone || req.body.loginId || req.body.email;
         const inputPass = req.body.password;
-        const cfToken   = req.body.cfToken;
 
         if (!inputId || !inputPass)
             return res.status(400).json({ message: 'Please enter credentials.' });
-        if (!cfToken)
-            return res.status(400).json({ message: 'CAPTCHA token is missing. Please verify you are human.' });
 
-        // ── Cloudflare Turnstile verify ───────────────────────────────────────
-        const formData = new URLSearchParams();
-        formData.append('secret',   TURNSTILE_SECRET_KEY);
-        formData.append('response', cfToken);
-
-        const cfRes  = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
-            method: 'POST',
-            body:   formData,
-        });
-        const cfData = await cfRes.json();
-
-        if (!cfData.success) {
-            console.error('🔥 CAPTCHA failed:', cfData['error-codes']);
-            return res.status(400).json({ message: 'CAPTCHA verification failed. Please try again.' });
-        }
-
-        // ── Find user ─────────────────────────────────────────────────────────
+        // ── Find user by phone / email / employeeId / username ────────────────
         const user = await User.findOne({
             $or: [
                 { phone:      inputId.toString() },
@@ -141,21 +115,19 @@ router.post('/login', async (req, res) => {
         if (!isMatch)
             return res.status(400).json({ message: 'Invalid password.' });
 
-        // ── Issue both tokens ─────────────────────────────────────────────────
+        // ── Issue tokens ──────────────────────────────────────────────────────
         const accessToken  = signAccess(user._id, user.role);
         const refreshToken = signRefresh(user._id);
 
-        // Save refresh token in DB — wiped on server restart via server.js
         user.refreshToken = refreshToken;
         await user.save();
 
-        // Refresh token goes in httpOnly cookie (JS can't touch it)
         setRefreshCookie(res, refreshToken);
 
         console.log(`✅ Login: ${user.employeeId || user.phone}`);
         res.json({
             success: true,
-            token: accessToken,   // 15m access token — stored in React state only, NOT localStorage
+            token: accessToken,
             user: {
                 id:           user._id,
                 name:         user.name,
