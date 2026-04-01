@@ -13,7 +13,7 @@ import AdminStaff      from './tabs/AdminStaff';
 import AdminSettings   from './tabs/AdminSettings';
 import AdminEvents     from './tabs/AdminEvents';
 
-const API = 'http://localhost:5001';
+const API = 'https://clothing-inventory-bbhg.onrender.com';
 
 const AdminDashboard = () => {
     const navigate = useNavigate();

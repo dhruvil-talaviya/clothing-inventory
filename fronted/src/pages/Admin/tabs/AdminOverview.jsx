@@ -347,8 +347,8 @@ const AdminOverview = () => {
         isRefresh ? setRefreshing(true) : setLoading(true);
         try {
             const [salesRes, stockRes] = await Promise.all([
-                axios.get('http://localhost:5001/api/admin/sales-history'),
-                axios.get('http://localhost:5001/api/admin/products'),
+                axios.get('https://clothing-inventory-bbhg.onrender.com/api/admin/sales-history'),
+                axios.get('https://clothing-inventory-bbhg.onrender.com/api/admin/products'),
             ]);
             if (Array.isArray(salesRes.data)) { setAllSales(salesRes.data); calculateStats(salesRes.data); }
             else setError("Invalid data format.");

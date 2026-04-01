@@ -98,7 +98,7 @@ const AdminStaff = () => {
 
     const fetchStaff = async () => {
         try {
-            const res = await axios.get('http://localhost:5001/api/admin/staff');
+            const res = await axios.get('https://clothing-inventory-bbhg.onrender.com/api/admin/staff');
             setStaffList(res.data);
         } catch (err) { console.error(err); }
     };
@@ -126,7 +126,7 @@ const AdminStaff = () => {
 
         setCreating(true);
         try {
-            await axios.post('http://localhost:5001/api/admin/add-staff', {
+            await axios.post('https://clothing-inventory-bbhg.onrender.com/api/admin/add-staff', {
                 ...formData,
                 phone: formData.phone.trim(),
             });
@@ -144,7 +144,7 @@ const AdminStaff = () => {
         updateStaffLocal(selectedStaff._id, { isActive: newStatus });
         setSelectedStaff(prev => ({ ...prev, isActive: newStatus }));
         try {
-            await axios.put(`http://localhost:5001/api/admin/staff-status/${selectedStaff._id}`);
+            await axios.put(`https://clothing-inventory-bbhg.onrender.com/api/admin/staff-status/${selectedStaff._id}`);
             toast(`Account ${newStatus ? 'unlocked' : 'locked'} successfully`);
             setSelectedStaff(null);
         } catch {
@@ -159,7 +159,7 @@ const AdminStaff = () => {
         removeStaffLocal(deletedId);
         setSelectedStaff(null);
         try {
-            await axios.delete(`http://localhost:5001/api/admin/delete-staff/${deletedId}`);
+            await axios.delete(`https://clothing-inventory-bbhg.onrender.com/api/admin/delete-staff/${deletedId}`);
             toast('Staff account deleted permanently');
         } catch {
             await fetchStaff();

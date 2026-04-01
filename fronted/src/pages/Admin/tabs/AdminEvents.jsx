@@ -295,7 +295,7 @@ const AdminEvents = () => {
     useEffect(() => { fetchEvents(); }, []);
 
     const fetchEvents = async () => {
-        try { const res = await axios.get('http://localhost:5001/api/admin/events'); setEvents(res.data); }
+        try { const res = await axios.get('https://clothing-inventory-bbhg.onrender.com/api/admin/events'); setEvents(res.data); }
         catch (err) { console.error("Error fetching events", err); }
     };
 
@@ -314,7 +314,7 @@ const AdminEvents = () => {
     const handleDelete = async () => {
         if (!deleteTarget) return;
         try {
-            await axios.delete(`http://localhost:5001/api/admin/events/${deleteTarget._id}`);
+            await axios.delete(`https://clothing-inventory-bbhg.onrender.com/api/admin/events/${deleteTarget._id}`);
             setDeleteTarget(null);
             fetchEvents();
         } catch { alert("Failed to delete event"); }
@@ -334,8 +334,8 @@ const AdminEvents = () => {
             saleOffer:   formData.saleOffer.trim(),
         };
         try {
-            if (isEditing) await axios.put(`http://localhost:5001/api/admin/events/${formData._id}`, payload);
-            else           await axios.post('http://localhost:5001/api/admin/events', payload);
+            if (isEditing) await axios.put(`https://clothing-inventory-bbhg.onrender.com/api/admin/events/${formData._id}`, payload);
+            else           await axios.post('https://clothing-inventory-bbhg.onrender.com/api/admin/events', payload);
             setShowModal(false); fetchEvents();
         } catch (err) {
             setFormError(`[${err.response?.status||'Error'}] ${err.response?.data?.message || err.message || 'Failed to save event.'}`);

@@ -39,7 +39,7 @@ const StaffSettings = () => {
         try {
             const token = localStorage.getItem('token');
             // FIX: Hardcoded URL
-            await axios.post('http://localhost:5001/api/staff/change-password', {
+            await axios.post('https://clothing-inventory-bbhg.onrender.com/api/staff/change-password', {
                 userId: user._id,
                 currentPassword: passwords.currentPassword,
                 newPassword: passwords.newPassword

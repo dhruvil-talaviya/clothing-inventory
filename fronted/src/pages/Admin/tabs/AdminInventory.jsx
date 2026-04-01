@@ -526,7 +526,7 @@ const AdminInventory = () => {
     const fetchProducts = async () => {
         setIsLoading(true);
         try {
-            const res = await axios.get('http://localhost:5001/api/admin/products').catch(() => ({ data: [] }));
+            const res = await axios.get('https://clothing-inventory-bbhg.onrender.com/api/admin/products').catch(() => ({ data: [] }));
             setProducts(res.data || []);
             setShowAlertBanner(true); // re-show banner on refresh
         } catch (err) { console.error(err); }
@@ -571,7 +571,7 @@ const AdminInventory = () => {
             formData.append('totalStock', totalStock);
             formData.append('isAvailable', true);
             if (addImageFile) formData.append('image', addImageFile);
-            await axios.post('http://localhost:5001/api/admin/add-product', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+            await axios.post('https://clothing-inventory-bbhg.onrender.com/api/admin/add-product', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
             notify('✅ Product Added Successfully!', 'success');
             setShowAddModal(false);
             setProductForm(BLANK_FORM);
@@ -613,7 +613,7 @@ const AdminInventory = () => {
             formData.append('totalStock', totalStock);
             if (editImageFile) formData.append('image', editImageFile);
             if (!editImagePreview && !editImageFile) formData.append('removeImage', 'true');
-            await axios.put(`http://localhost:5001/api/admin/edit-product/${selectedProduct._id}`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+            await axios.put(`https://clothing-inventory-bbhg.onrender.com/api/admin/edit-product/${selectedProduct._id}`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
             notify('✅ Product Updated!', 'success');
             setShowEditModal(false);
             setEditImageFile(null); setEditImagePreview(null);
@@ -624,14 +624,14 @@ const AdminInventory = () => {
     const handleDeleteProduct = async () => {
         if (!deleteTarget) return;
         try {
-            await axios.delete(`http://localhost:5001/api/admin/delete-product/${deleteTarget._id}`);
+            await axios.delete(`https://clothing-inventory-bbhg.onrender.com/api/admin/delete-product/${deleteTarget._id}`);
             notify('Product Deleted', 'success'); setDeleteTarget(null); fetchProducts();
         } catch { notify('Failed to delete', 'error'); }
     };
 
     const toggleStatus = async (id) => {
         try {
-            await axios.put(`http://localhost:5001/api/admin/product-status/${id}`);
+            await axios.put(`https://clothing-inventory-bbhg.onrender.com/api/admin/product-status/${id}`);
             setProducts(prev => prev.map(p => p._id === id ? { ...p, isAvailable: !p.isAvailable } : p));
         } catch { notify('Failed to update status', 'error'); }
     };

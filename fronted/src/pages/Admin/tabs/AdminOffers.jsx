@@ -24,7 +24,7 @@ const AdminOffers = () => {
 
     const fetchOffers = async () => {
         try {
-            const res = await axios.get('http://localhost:5001/api/offers');
+            const res = await axios.get('https://clothing-inventory-bbhg.onrender.com/api/offers');
             setOffers(Array.isArray(res.data) ? res.data : []);
         } catch (err) {
             console.error('Fetch Error:', err);
@@ -34,7 +34,7 @@ const AdminOffers = () => {
     const handleCreateOffer = async (e) => {
         e.preventDefault();
         try {
-            await axios.post('http://localhost:5001/api/offers', {
+            await axios.post('https://clothing-inventory-bbhg.onrender.com/api/offers', {
                 name:            newOffer.name,
                 code:            newOffer.code.toUpperCase(),
                 discountPercent: Number(newOffer.discountPercent),
@@ -51,7 +51,7 @@ const AdminOffers = () => {
 
     const handleDelete = async (id) => {
         try {
-            await axios.delete(`http://localhost:5001/api/offers/${id}`);
+            await axios.delete(`https://clothing-inventory-bbhg.onrender.com/api/offers/${id}`);
             notify('Coupon deleted.');
             setConfirmDeleteId(null);
             fetchOffers();

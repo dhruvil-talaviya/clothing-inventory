@@ -3,7 +3,7 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { FiLock, FiEye, FiEyeOff, FiCheck, FiShield, FiArrowRight } from 'react-icons/fi';
 
-const API = 'http://localhost:5001';
+const API = 'https://clothing-inventory-bbhg.onrender.com';
 
 /**
  * FirstLogin — shown when isFirstLogin === true (new staff, first time)

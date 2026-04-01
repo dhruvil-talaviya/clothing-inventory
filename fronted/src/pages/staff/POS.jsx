@@ -401,7 +401,7 @@ const POS = ({ products = [], cart = [], setCart, discounts = [], onCheckoutSucc
         try {
             const token = localStorage.getItem('token');
             const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
-            const res = await axios.post('http://localhost:5001/api/staff/create-sale', saleData, config);
+            const res = await axios.post('https://clothing-inventory-bbhg.onrender.com/api/staff/create-sale', saleData, config);
             alert('✅ Sale Completed Successfully!');
             if (onCheckoutSuccess) onCheckoutSuccess(res.data);
             setCart([]);

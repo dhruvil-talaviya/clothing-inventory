@@ -5,7 +5,7 @@ import {
     FiCheck, FiAlertTriangle, FiRefreshCw, FiPhone, FiLock, FiArrowRight
 } from 'react-icons/fi';
 
-const API  = 'http://localhost:5001';
+const API  = 'https://clothing-inventory-bbhg.onrender.com';
 const iCls = "w-full bg-[#080c14] border border-slate-800 text-white px-4 py-3 rounded-2xl outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20 transition-all text-sm placeholder:text-slate-700";
 const lCls = "text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1.5";
 

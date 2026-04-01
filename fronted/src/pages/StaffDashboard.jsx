@@ -485,7 +485,7 @@ const StaffDashboard = () => {
 
     const handleLogout = useCallback(async () => {
         try {
-            await axios.post('http://localhost:5001/api/auth/logout', {}, { withCredentials: true });
+            await axios.post('https://clothing-inventory-bbhg.onrender.com/api/auth/logout', {}, { withCredentials: true });
         } catch { /* server down — still log out locally */ }
         setAccessToken(null);
         setAuthUser(null);
@@ -560,11 +560,11 @@ const StaffDashboard = () => {
         if (!userId) return;
     
         const [pR, sR, hR, oR, eR] = await Promise.allSettled([
-            axios.get('http://localhost:5001/api/staff/products'),
-            axios.get(`http://localhost:5001/api/staff/daily-stats/${userId}`),
-            axios.get(`http://localhost:5001/api/staff/history/${userId}`),
-            axios.get('http://localhost:5001/api/admin/discounts'),
-            axios.get('http://localhost:5001/api/admin/events'),
+            axios.get('https://clothing-inventory-bbhg.onrender.com/api/staff/products'),
+            axios.get(`https://clothing-inventory-bbhg.onrender.com/api/staff/daily-stats/${userId}`),
+            axios.get(`https://clothing-inventory-bbhg.onrender.com/api/staff/history/${userId}`),
+            axios.get('https://clothing-inventory-bbhg.onrender.com/api/admin/discounts'),
+            axios.get('https://clothing-inventory-bbhg.onrender.com/api/admin/events'),
         ]);
     
         // ✅ Products
@@ -722,7 +722,7 @@ if (oR.status==='fulfilled') {
             fp.append('name',profileForm.name); fp.append('phone',profileForm.phone);
             fp.append('address',profileForm.address); fp.append('email',profileForm.email); fp.append('city',profileForm.city);
             if(photoFile) fp.append('photo',photoFile);
-            const res=await axios.put(`http://localhost:5001/api/staff/profile/${userId}`,fp,{headers:{'Content-Type':'multipart/form-data'}});
+            const res=await axios.put(`https://clothing-inventory-bbhg.onrender.com/api/staff/profile/${userId}`,fp,{headers:{'Content-Type':'multipart/form-data'}});
             const su=res.data?.user||{};
             const updated={...currentUser,...su,name:profileForm.name,phone:profileForm.phone,address:profileForm.address,email:profileForm.email,city:profileForm.city,...(su.photo?{photo:su.photo}:{})};
             localStorage.setItem('user',JSON.stringify(updated));
@@ -744,7 +744,7 @@ if (oR.status==='fulfilled') {
         if (pwForm.newPassword !== pwForm.confirmPassword) { setSettingMsg({ type: 'error', text: 'New passwords do not match.' }); return; }
         setOtpStep('sending'); setSettingMsg(null);
         try {
-            await axios.post('http://localhost:5001/api/auth/send-otp', { phone: currentUser.phone });
+            await axios.post('https://clothing-inventory-bbhg.onrender.com/api/auth/send-otp', { phone: currentUser.phone });
             setOtpStep('verify');
             startOtpTimer();
             notify('OTP sent to your registered mobile number!');
@@ -758,11 +758,11 @@ if (oR.status==='fulfilled') {
         const userId = user?.id || user?._id;
         setSettingLoading(true); setSettingMsg(null);
         try {
-            await axios.post('http://localhost:5001/api/auth/verify-otp', {
+            await axios.post('https://clothing-inventory-bbhg.onrender.com/api/auth/verify-otp', {
                 phone: currentUser.phone,
                 otp: otpInput.trim(),
             });
-            await axios.post('http://localhost:5001/api/staff/change-password', {
+            await axios.post('https://clothing-inventory-bbhg.onrender.com/api/staff/change-password', {
                 userId,
                 currentPassword: pwForm.currentPassword,
                 newPassword: pwForm.newPassword,
@@ -780,7 +780,7 @@ if (oR.status==='fulfilled') {
     };
 
     const completeSale = async (saleData) => {
-        const res = await axios.post('http://localhost:5001/api/staff/create-sale', saleData);
+        const res = await axios.post('https://clothing-inventory-bbhg.onrender.com/api/staff/create-sale', saleData);
         const savedSale = { ...saleData, _id: res.data?.sale?._id||'', invoiceId: res.data?.sale?.invoiceId||'', date: new Date() };
         notify('Sale completed! Opening invoice...');
         setCart([]); setSelectedDiscount(null); setShowBillModal(false);
@@ -841,7 +841,7 @@ if (oR.status==='fulfilled') {
             if (!loaded) { notify('Razorpay failed to load. Check internet connection.', 'error'); setRazorpayLoading(false); return; }
 
             const amountPaise = Math.round(finalTotal * 100);
-            const orderRes = await axios.post('http://localhost:5001/api/staff/create-razorpay-order', {
+            const orderRes = await axios.post('https://clothing-inventory-bbhg.onrender.com/api/staff/create-razorpay-order', {
                 amount: amountPaise,
                 currency: 'INR',
                 receipt: `rcpt_${Date.now()}`,
@@ -875,7 +875,7 @@ if (oR.status==='fulfilled') {
                 modal:   { ondismiss: () => { notify('Payment cancelled.', 'error'); setRazorpayLoading(false); } },
                 handler: async (response) => {
                     try {
-                        await axios.post('http://localhost:5001/api/staff/verify-razorpay-payment', {
+                        await axios.post('https://clothing-inventory-bbhg.onrender.com/api/staff/verify-razorpay-payment', {
                             razorpay_order_id:   response.razorpay_order_id,
                             razorpay_payment_id: response.razorpay_payment_id,
                             razorpay_signature:  response.razorpay_signature,
@@ -915,7 +915,7 @@ if (oR.status==='fulfilled') {
         if (!email || !email.includes('@')) { notify('Enter a valid email address.', 'error'); return; }
         setEmailSending(true); setEmailStatus(null);
         try {
-            await axios.post('http://localhost:5001/api/staff/send-invoice-email', { saleId: sale._id, email });
+            await axios.post('https://clothing-inventory-bbhg.onrender.com/api/staff/send-invoice-email', { saleId: sale._id, email });
             setEmailStatus('sent');
             notify('Invoice emailed successfully!');
         } catch (err) {

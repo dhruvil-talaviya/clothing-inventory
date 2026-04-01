@@ -4,7 +4,7 @@ import {
     FiCheck, FiEye, FiEyeOff, FiShield, FiArrowRight, FiZap
 } from 'react-icons/fi';
 
-const API = 'http://localhost:5001';
+const API = 'https://clothing-inventory-bbhg.onrender.com';
 
 const iCls = "w-full bg-[#060a12] border border-white/[0.06] text-white px-4 py-3 rounded-xl outline-none focus:border-violet-500/60 focus:bg-[#0a0f1e] transition-all text-sm placeholder:text-white/20 font-light tracking-wide";
 const lCls = "text-[9px] font-bold text-white/30 uppercase tracking-[0.2em] block mb-2";
