@@ -216,7 +216,7 @@ router.put('/profile/:id', upload.single('photo'), async (req, res) => {
         if (city    !== undefined) updateData.city    = city.trim();
 
         if (req.file) {
-            updateData.photo = `http://localhost:5001/uploads/${req.file.filename}`;
+            updateData.photo = `https://clothing-inventory-bbhg.onrender.com/uploads/${req.file.filename}`;
         }
 
         const updatedUser = await User.findByIdAndUpdate(

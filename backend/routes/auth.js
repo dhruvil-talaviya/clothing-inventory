@@ -20,7 +20,7 @@ const signRefresh = (id) =>
 const setRefreshCookie = (res, token) =>
     res.cookie('refreshToken', token, {
         httpOnly: true,
-        secure:   false,  // false for localhost (no HTTPS in dev)
+        secure: true, // true for production HTTPS
         sameSite: 'lax',
         maxAge:   7 * 24 * 60 * 60 * 1000, // 7 days
     });
