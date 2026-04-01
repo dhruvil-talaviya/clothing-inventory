@@ -12,7 +12,7 @@ const app = express();
 
 
 app.use(cors({
-    origin: ['http://localhost:5173', 'https://clothing-inventory-mu.vercel.app', 'https://clothing-inventory-8derxuw32-talaviyad380-6817s-projects.vercel.app', 'https://clothing-inventory-dz050d72c-talaviyad380-6817s-projects.vercel.app'],
+    origin: function(origin, callback) { callback(null, true); },
     credentials: true,
 }));
 app.use(express.json({ limit: '10mb' }));
