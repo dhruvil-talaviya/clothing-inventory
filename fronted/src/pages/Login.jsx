@@ -7,7 +7,8 @@ import {
 } from 'react-icons/fi';
 import { useAuth } from '../App';
 
-const API = 'http://localhost:5001';
+import config from '../config';
+const API = config.API_BASE_URL.replace('/api', '');
 
 // ─── Checkbox Captcha ─────────────────────────────────────────────────────────
 const CheckboxCaptcha = ({ onVerify }) => {
