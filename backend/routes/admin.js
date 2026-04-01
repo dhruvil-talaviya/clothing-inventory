@@ -6,7 +6,7 @@ const path    = require('path');
 const fs      = require('fs');
 
 const { User, Product, Sale } = require('../models/Schemas');
-const Discount = require('../models/discount');
+const Discount = require('../models/Discount');
 const Event    = require('../models/Event');
 
 // ─── MULTER SETUP ────────────────
