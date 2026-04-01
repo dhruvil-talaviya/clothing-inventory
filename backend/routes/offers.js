@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 
 // FIX: Changed 'Discount' to 'discount' to match your actual filename!
-const Discount = require('../models/discount');
+const Discount = require('../models/Discount');
 
 // GET ALL OFFERS
 router.get('/', async (req, res) => {
