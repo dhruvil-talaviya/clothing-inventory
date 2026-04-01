@@ -10,7 +10,8 @@ import AdminDashboard from './pages/Admin/AdminDashboard';
 import StaffDashboard from './pages/StaffDashboard';
 import FirstLogin     from './pages/FirstLogin';
 
-const API = 'http://localhost:5001';
+import config from './config.js';
+const API = config.API_BASE_URL.replace('/api', '');
 
 export const AuthContext = createContext(null);
 export const useAuth = () => useContext(AuthContext);
