@@ -1,10 +1,4 @@
-// ─── src/components/ProtectedRoute.jsx ───────────────────────────────────────
-//
-// Works with the AuthProvider in App.jsx.
-// status = 'checking' → show spinner (refresh call in progress, don't redirect)
-// status = 'valid'    → check role, render page
-// status = 'invalid'  → redirect to login
-// ─────────────────────────────────────────────────────────────────────────────
+
 
 import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../App';  // adjust path if App.jsx is elsewhere

@@ -3,7 +3,7 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../App';
 import { 
-    FiGrid, FiBox, FiUsers, FiSettings, FiLogOut, FiPercent, FiCalendar
+    FiGrid, FiBox, FiUsers, FiSettings, FiLogOut, FiPercent, FiCalendar, FiMenu, FiX
 } from 'react-icons/fi'; 
 
 import AdminOverview   from './tabs/AdminOverview';
@@ -20,6 +20,7 @@ const AdminDashboard = () => {
     const { setStatus, setAuthUser, setAccessToken } = useAuth();
     const [activeTab, setActiveTab] = useState('overview'); 
     const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
+    const [sidebarOpen, setSidebarOpen] = useState(false);
     
     const user = JSON.parse(localStorage.getItem('user')) || { name: 'Admin', role: 'Super Admin' };
 
@@ -32,6 +33,11 @@ const AdminDashboard = () => {
         setStatus('invalid');
         localStorage.clear();
         navigate('/', { replace: true });
+    };
+
+    const handleTabClick = (tab) => {
+        setActiveTab(tab);
+        setSidebarOpen(false); // close sidebar on mobile after click
     };
 
     const renderContent = () => {
@@ -49,22 +55,42 @@ const AdminDashboard = () => {
     return (
         <div className="flex h-screen bg-[#0f172a] text-slate-200 font-sans overflow-hidden">
             
-            {/* SIDEBAR — w-64 on small laptops, w-72 on large */}
-            <aside className="w-64 lg:w-72 bg-[#1e293b] border-r border-slate-800 flex flex-col z-20 transition-all shrink-0">
-                <div className="h-20 lg:h-24 flex items-center px-6 lg:px-8 border-b border-slate-800 bg-[#1e293b]">
+            {/* MOBILE OVERLAY */}
+            {sidebarOpen && (
+                <div 
+                    className="fixed inset-0 bg-black/60 z-30 lg:hidden"
+                    onClick={() => setSidebarOpen(false)}
+                />
+            )}
+
+            {/* SIDEBAR */}
+            <aside className={`
+                fixed lg:static inset-y-0 left-0 z-40
+                w-64 lg:w-72 bg-[#1e293b] border-r border-slate-800 flex flex-col
+                transform transition-transform duration-300 ease-in-out
+                ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+            `}>
+                <div className="h-20 lg:h-24 flex items-center justify-between px-6 lg:px-8 border-b border-slate-800 bg-[#1e293b]">
                     <h1 className="text-lg lg:text-xl font-black tracking-widest text-white">
                         STYLE<span className="text-indigo-500">SYNC</span>
                     </h1>
+                    {/* Close button on mobile */}
+                    <button 
+                        onClick={() => setSidebarOpen(false)}
+                        className="lg:hidden text-slate-400 hover:text-white"
+                    >
+                        <FiX size={20}/>
+                    </button>
                 </div>
 
-                <nav className="p-3 lg:p-4 space-y-1 lg:space-y-2 flex-1 overflow-y-auto custom-scrollbar">
-                    <NavButton id="overview" label="Dashboard"        icon={<FiGrid/>}     active={activeTab} onClick={setActiveTab} />
-                    <NavButton id="products" label="Inventory"        icon={<FiBox/>}      active={activeTab} onClick={setActiveTab} />
-                    <NavButton id="offers"   label="Offers & Coupons" icon={<FiPercent/>}  active={activeTab} onClick={setActiveTab} />
-                    <NavButton id="staff"    label="Staff Team"       icon={<FiUsers/>}    active={activeTab} onClick={setActiveTab} />
-                    <NavButton id="events"   label="Events & Fest"    icon={<FiCalendar/>} active={activeTab} onClick={setActiveTab} />
+                <nav className="p-3 lg:p-4 space-y-1 lg:space-y-2 flex-1 overflow-y-auto">
+                    <NavButton id="overview" label="Dashboard"        icon={<FiGrid/>}     active={activeTab} onClick={handleTabClick} />
+                    <NavButton id="products" label="Inventory"        icon={<FiBox/>}      active={activeTab} onClick={handleTabClick} />
+                    <NavButton id="offers"   label="Offers & Coupons" icon={<FiPercent/>}  active={activeTab} onClick={handleTabClick} />
+                    <NavButton id="staff"    label="Staff Team"       icon={<FiUsers/>}    active={activeTab} onClick={handleTabClick} />
+                    <NavButton id="events"   label="Events & Fest"    icon={<FiCalendar/>} active={activeTab} onClick={handleTabClick} />
                     <div className="my-2 border-t border-slate-700 mx-4"/>
-                    <NavButton id="settings" label="Settings"         icon={<FiSettings/>} active={activeTab} onClick={setActiveTab} />
+                    <NavButton id="settings" label="Settings"         icon={<FiSettings/>} active={activeTab} onClick={handleTabClick} />
                 </nav>
 
                 <div className="p-3 lg:p-4 border-t border-slate-800">
@@ -78,19 +104,28 @@ const AdminDashboard = () => {
             {/* MAIN CONTENT */}
             <div className="flex-1 flex flex-col bg-[#0f172a] overflow-hidden relative min-w-0">
                 
-                {/* HEADER — tighter padding on small screens */}
-                <header className="h-20 lg:h-24 border-b border-slate-800 flex justify-between items-center px-5 lg:px-10 bg-[#0f172a]/90 backdrop-blur-sm z-10 shrink-0">
-                    <div>
-                        <h2 className="text-xl lg:text-2xl font-bold text-white capitalize">
-                            {activeTab === 'events' ? 'Events & Festivals' : activeTab}
-                        </h2>
-                        <p className="text-slate-500 text-xs">Admin Control Panel</p>
+                {/* HEADER */}
+                <header className="h-16 lg:h-24 border-b border-slate-800 flex justify-between items-center px-4 lg:px-10 bg-[#0f172a]/90 backdrop-blur-sm z-10 shrink-0">
+                    <div className="flex items-center gap-3">
+                        {/* Hamburger menu — mobile only */}
+                        <button 
+                            onClick={() => setSidebarOpen(true)}
+                            className="lg:hidden text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-800 transition"
+                        >
+                            <FiMenu size={22}/>
+                        </button>
+                        <div>
+                            <h2 className="text-base lg:text-2xl font-bold text-white capitalize">
+                                {activeTab === 'events' ? 'Events & Festivals' : activeTab}
+                            </h2>
+                            <p className="text-slate-500 text-xs hidden sm:block">Admin Control Panel</p>
+                        </div>
                     </div>
                     
                     <div className="relative">
                         <button 
                             onClick={() => setIsProfileDropdownOpen(!isProfileDropdownOpen)} 
-                            className="flex items-center gap-3 lg:gap-4 hover:bg-slate-800 p-2 rounded-xl transition focus:outline-none"
+                            className="flex items-center gap-2 lg:gap-4 hover:bg-slate-800 p-2 rounded-xl transition focus:outline-none"
                         >
                             <div className="text-right hidden md:block">
                                 <p className="text-sm font-bold text-white">{user.name}</p>
@@ -121,8 +156,8 @@ const AdminDashboard = () => {
                     </div>
                 </header>
 
-                {/* CONTENT — tighter padding on small screens */}
-                <main className="flex-1 overflow-y-auto p-4 lg:p-8 custom-scrollbar">
+                {/* CONTENT */}
+                <main className="flex-1 overflow-y-auto p-3 lg:p-8">
                     {renderContent()}
                 </main>
             </div>
