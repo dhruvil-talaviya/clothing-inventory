@@ -53,7 +53,7 @@ const AdminDashboard = () => {
     };
 
     return (
-        <div className="flex h-screen bg-[#0f172a] text-slate-200 font-sans overflow-hidden">
+        <div className="flex h-screen min-h-[100dvh] bg-[#0f172a] text-slate-200 font-sans overflow-hidden">
             
             {/* MOBILE OVERLAY */}
             {sidebarOpen && (

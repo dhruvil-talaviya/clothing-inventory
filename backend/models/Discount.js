@@ -15,6 +15,7 @@ const discountSchema = new mongoose.Schema({
     
     type: { type: String, default: "PERCENTAGE" },
     isActive: { type: Boolean, default: true },
+    startDate: { type: Date, default: Date.now },
     validUntil: { type: Date },
     createdAt: { type: Date, default: Date.now }
 }, { collection: 'discounts' }); // <--- Matches your Compass screenshot

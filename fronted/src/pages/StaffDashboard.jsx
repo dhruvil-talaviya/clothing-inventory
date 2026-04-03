@@ -587,18 +587,20 @@ const StaffDashboard = () => {
             setSalesHistory(safeArr(hR.value.data));
         }
     
-        // 🔥 ✅ UPDATED COUPON FILTER (EXPIRED HIDE FIX)
-        // ✅ FIX — replaces the old one-liner
-if (oR.status==='fulfilled') {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    setActiveOffers(
-        safeArr(oR.value.data).filter(o =>
-            o.isActive &&
-            (!o.validUntil || new Date(o.validUntil) >= today)
-        )
-    );
-}
+        // 🔥 ✅ UPDATED COUPON FILTER (START DATE & EXPIRED HIDE FIX)
+        if (oR.status==='fulfilled') {
+            const todayStart = new Date(new Date().setHours(0, 0, 0, 0));
+            const todayEnd = new Date(new Date().setHours(23, 59, 59, 999));
+            
+            setActiveOffers(
+                safeArr(oR.value.data).filter(o => {
+                    if (!o.isActive) return false;
+                    const isStarted = !o.startDate || new Date(o.startDate) <= todayEnd;
+                    const isNotExpired = !o.validUntil || new Date(o.validUntil) >= todayStart;
+                    return isStarted && isNotExpired;
+                })
+            );
+        }
     
         // ✅ Events
         if (eR.status === 'fulfilled') {
@@ -935,12 +937,12 @@ if (oR.status==='fulfilled') {
 
     // ══════════════════════════════════════════════════════════════════════════
     return (
-        <div className="flex h-screen bg-[#080C14] font-sans text-slate-200 overflow-hidden">
+        <div className="flex h-screen min-h-[100dvh] bg-[#080C14] font-sans text-slate-200 overflow-hidden">
             <DarkScrollStyle/>
 
             {/* TOAST */}
             {toast&&(
-                <div className={`fixed top-4 right-4 z-[400] px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2.5 font-bold text-white border text-sm ${toast.type==='error'?'bg-red-900/95 border-red-700':'bg-[#1e293b] border-indigo-600'}`}>
+                <div className={`fixed top-4 left-4 right-4 sm:left-auto sm:right-4 sm:w-auto z-[400] px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2.5 font-bold text-white border text-sm ${toast.type==='error'?'bg-red-900/95 border-red-700':'bg-[#1e293b] border-indigo-600'}`}>
                     {toast.type==='error'?<FiAlertTriangle className="text-red-400 shrink-0" size={15}/>:<FiCheckCircle className="text-emerald-400 shrink-0" size={15}/>}
                     {toast.text}
                 </div>
@@ -948,8 +950,8 @@ if (oR.status==='fulfilled') {
 
             {sizeModal&&<SizeModal product={sizeModal} onConfirm={addToCartWithSize} onClose={()=>setSizeModal(null)}/>}
 
-            {/* ── SIDEBAR ── */}
-            <nav className="w-16 bg-[#0F172A] flex flex-col items-center py-6 border-r border-slate-800/60 z-20 shrink-0">
+            {/* ── SIDEBAR (Desktop only) ── */}
+            <nav className="hidden sm:flex w-16 bg-[#0F172A] flex-col items-center py-6 border-r border-slate-800/60 z-20 shrink-0">
                 <div className="mb-8 w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center shrink-0">
                     <FiPackage size={18} className="text-white"/>
                 </div>
@@ -960,28 +962,50 @@ if (oR.status==='fulfilled') {
                     <NavIcon icon={<FiCalendar size={18}/>} active={view==='events'}   onClick={()=>setView('events')}   label="Events" badge={activeEventCount}/>
                     <NavIcon icon={<FiSettings size={18}/>} active={view==='settings'} onClick={()=>setView('settings')} label="Settings"/>
                 </div>
-                {/* ✅ FIX: was onClick={()=>navigate('/')} — now calls handleLogout which clears localStorage first */}
                 <button onClick={handleLogout} className="p-3 mt-auto text-slate-600 hover:text-red-400 transition-colors">
                     <FiLogOut size={18}/>
                 </button>
             </nav>
 
-            <main className="flex-1 flex flex-col overflow-hidden min-w-0">
+            {/* ── BOTTOM NAV BAR (Mobile only) ── */}
+            <nav className="sm:hidden fixed bottom-0 inset-x-0 z-30 bg-[#0F172A] border-t border-slate-800/80 flex items-center justify-around px-2" style={{paddingBottom:'env(safe-area-inset-bottom, 0px)'}}>
+                {[
+                    {id:'home',     icon:<FiHome size={20}/>,     label:'Home'},
+                    {id:'pos',      icon:<FiGrid size={20}/>,     label:'Billing'},
+                    {id:'history',  icon:<FiFileText size={20}/>, label:'History'},
+                    {id:'events',   icon:<FiCalendar size={20}/>, label:'Events',  badge: activeEventCount},
+                    {id:'settings', icon:<FiSettings size={20}/>, label:'More'},
+                ].map(item => (
+                    <button key={item.id} onClick={()=>setView(item.id)}
+                        className={`relative flex flex-col items-center gap-0.5 py-2 px-3 transition-all ${
+                            view===item.id ? 'text-indigo-400' : 'text-slate-600'
+                        }`}>
+                        <div className="relative">
+                            {item.icon}
+                            {item.badge>0 && <span className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-emerald-500 rounded-full text-[8px] font-black text-white flex items-center justify-center">{item.badge}</span>}
+                        </div>
+                        <span className="text-[9px] font-bold tracking-wide">{item.label}</span>
+                        {view===item.id && <div className="absolute bottom-0 inset-x-0 h-0.5 bg-indigo-500 rounded-t-full"/>}
+                    </button>
+                ))}
+            </nav>
+
+            <main className="flex-1 flex flex-col overflow-hidden min-w-0 pb-16 sm:pb-0">
 
                 {/* ══ HOME ══ */}
                 {view==='home'&&(
-                    <div className="p-6 h-full overflow-y-auto ds">
-                        <header className="flex justify-between items-start mb-6">
+                    <div className="p-4 sm:p-6 h-full overflow-y-auto ds">
+                        <header className="flex justify-between items-start gap-3 mb-6">
                             <div>
-                                <h1 className="text-2xl font-black text-white">Retail Command Center</h1>
-                                <p className="text-slate-500 text-sm mt-0.5">Operator: <span className="text-indigo-400 font-bold">{currentUser?.name}</span></p>
+                                <h1 className="text-xl sm:text-2xl font-black text-white">Retail Command Center</h1>
+                                <p className="text-slate-500 text-xs sm:text-sm mt-0.5">Operator: <span className="text-indigo-400 font-bold">{currentUser?.name}</span></p>
                             </div>
-                            <div className="bg-[#0F172A] border border-slate-800 px-4 py-3 rounded-xl text-right">
-                                <p className="text-2xl font-mono font-bold text-white">{currentTime.toLocaleTimeString()}</p>
+                            <div className="bg-[#0F172A] border border-slate-800 px-3 py-2 sm:px-4 sm:py-3 rounded-xl text-right shrink-0">
+                                <p className="text-lg sm:text-2xl font-mono font-bold text-white">{currentTime.toLocaleTimeString()}</p>
                                 <p className="text-[10px] text-slate-500 mt-0.5 font-bold uppercase tracking-wider">Shift: {shiftDuration}</p>
                             </div>
                         </header>
-                        <div className="grid grid-cols-3 gap-4 mb-6">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-6">
                             <StatCard title="Today's Revenue" value={`Rs.${safeNum(stats.revenue).toFixed(2)}`} icon={<FiCreditCard/>} color="indigo"/>
                             <StatCard title="Today's Sales"   value={safeNum(stats.count)}                     icon={<FiCheckCircle/>} color="emerald"/>
                             <StatCard title="Shift Timer"     value={shiftDuration}                            icon={<FiClock/>}       color="blue"/>
@@ -1092,8 +1116,70 @@ if (oR.status==='fulfilled') {
                             </div>
                         </div>
 
-                        {/* ── Cart sidebar ── */}
-                        <div className="w-[340px] xl:w-[380px] shrink-0 bg-[#0F172A] border-l border-slate-800 flex flex-col">
+                        {/* ── Cart sidebar (Desktop) / Bottom Sheet (Mobile) ── */}
+                        {/* Mobile: floating cart button */}
+                        <div className="sm:hidden fixed bottom-20 right-4 z-20" style={{bottom:'calc(env(safe-area-inset-bottom, 0px) + 72px)'}}>
+                            <button onClick={()=>setShowBillModal(false)||setView('pos')} className="hidden"/>
+                            <button
+                                onClick={()=>document.getElementById('mobile-cart-sheet')?.classList.toggle('translate-y-0')||document.getElementById('mobile-cart-sheet')?.classList.toggle('translate-y-full')}
+                                className="relative w-14 h-14 bg-indigo-600 hover:bg-indigo-500 rounded-full shadow-2xl shadow-indigo-600/40 flex items-center justify-center text-white transition-all active:scale-95">
+                                <FiShoppingCart size={22}/>
+                                {cartItemCount>0&&<span className="absolute -top-1 -right-1 w-5 h-5 bg-emerald-500 rounded-full text-[9px] font-black flex items-center justify-center border-2 border-[#080C14]">{cartItemCount}</span>}
+                            </button>
+                        </div>
+
+                        {/* Mobile Cart Bottom Sheet */}
+                        <div id="mobile-cart-sheet" className="sm:hidden fixed inset-x-0 bottom-0 z-50 translate-y-full transition-transform duration-300 ease-out"
+                            style={{top:'20%', paddingBottom:'env(safe-area-inset-bottom,0px)'}}>
+                            <div className="bg-[#0F172A] rounded-t-3xl border-t border-slate-700 h-full flex flex-col shadow-2xl">
+                                <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
+                                    <h2 className="text-base font-black text-white flex items-center gap-2"><FiShoppingCart className="text-indigo-400" size={16}/> Cart ({cartItemCount} items)</h2>
+                                    <button onClick={()=>document.getElementById('mobile-cart-sheet')?.classList.add('translate-y-full')}
+                                        className="p-1.5 bg-slate-800 text-slate-400 rounded-xl"><FiX size={16}/></button>
+                                </div>
+                                <div className="flex-1 overflow-y-auto p-3 space-y-2">
+                                    {cart.length===0?(
+                                        <div className="h-full flex flex-col items-center justify-center text-slate-700 gap-2 pt-10">
+                                            <FiShoppingCart size={32} className="opacity-20"/>
+                                            <p className="text-xs font-bold text-slate-600">Cart is empty</p>
+                                        </div>
+                                    ):cart.map(item=>(
+                                        <div key={item._cartKey} className="flex items-center gap-2.5 p-2.5 bg-[#080C14] rounded-xl border border-slate-800">
+                                            <img src={safeStr(item.image)||getProductImage(item.name)} alt={item.name}
+                                                onError={e=>{ e.target.onerror=null; e.target.src=getProductImage(item.name); }}
+                                                className="w-10 h-10 rounded-lg object-cover shrink-0 border border-slate-700"/>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-xs font-bold text-white truncate">{item.name}</p>
+                                                <div className="flex items-center gap-1.5 mt-0.5">
+                                                    <span className="text-[9px] text-slate-500">Rs.{safeNum(item.price).toFixed(2)}</span>
+                                                    {item._size&&item._size!=='OS'&&<span className="text-[8px] font-black bg-indigo-500/15 text-indigo-400 px-1 py-0.5 rounded border border-indigo-500/20">{item._size}</span>}
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-0.5 bg-[#0F172A] border border-slate-700 rounded-lg p-0.5 shrink-0">
+                                                <button onClick={()=>updateQty(item._cartKey,-1)} className="p-1 text-slate-400 hover:text-white rounded-md"><FiMinus size={10}/></button>
+                                                <span className="text-xs font-black text-white w-5 text-center">{item.qty}</span>
+                                                <button onClick={()=>updateQty(item._cartKey, 1)} className="p-1 text-slate-400 hover:text-white rounded-md"><FiPlus size={10}/></button>
+                                            </div>
+                                            <button onClick={()=>removeItem(item._cartKey)} className="text-slate-700 hover:text-red-400 transition-colors p-1 shrink-0"><FiTrash2 size={13}/></button>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="p-3 border-t border-slate-800 space-y-2 shrink-0">
+                                    <div className="bg-[#080C14] border border-slate-800 rounded-xl p-3 space-y-1">
+                                        <div className="flex justify-between text-xs text-slate-400"><span>Subtotal</span><span className="font-mono text-slate-200">Rs.{subtotal.toFixed(2)}</span></div>
+                                        <div className="flex justify-between text-xs text-emerald-400"><span>Discount</span><span className="font-mono">-Rs.{discountVal.toFixed(2)}</span></div>
+                                        <div className="flex justify-between text-lg font-black text-white pt-1 border-t border-slate-800"><span>Total</span><span className="text-indigo-400">Rs.{finalTotal.toFixed(2)}</span></div>
+                                    </div>
+                                    <button onClick={()=>{ if(cart.length>0){ document.getElementById('mobile-cart-sheet')?.classList.add('translate-y-full'); setShowBillModal(true); }}} disabled={cart.length===0}
+                                        className={`w-full py-3.5 rounded-xl font-black text-white flex items-center justify-center gap-2 transition-all ${cart.length>0?'bg-indigo-600 active:scale-95':'bg-slate-800 text-slate-500 cursor-not-allowed'}`}>
+                                        <FiCreditCard size={14}/> Proceed to Checkout
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Desktop Cart Sidebar */}
+                        <div className="hidden sm:flex w-[340px] xl:w-[380px] shrink-0 bg-[#0F172A] border-l border-slate-800 flex-col">
                             <div className="p-4 border-b border-slate-800 shrink-0 space-y-3">
                                 <div className="flex items-center justify-between">
                                     <h2 className="text-base font-black text-white flex items-center gap-2"><FiShoppingCart className="text-indigo-400" size={16}/> Current Bill</h2>
@@ -1191,12 +1277,13 @@ if (oR.status==='fulfilled') {
 
                 {/* ══ HISTORY ══ */}
                 {view==='history'&&(
-                    <div className="p-6 h-full overflow-y-auto ds">
-                        <div className="flex justify-between items-center mb-6">
-                            <div><h2 className="text-2xl font-black text-white">Sales History</h2><p className="text-slate-500 text-sm mt-0.5">All your past transactions</p></div>
-                            <div className="relative"><FiSearch className="absolute left-3 top-2.5 text-slate-500" size={13}/><input type="text" placeholder="Search invoice, name, phone…" onChange={e=>setHistorySearch(e.target.value)} className="bg-[#0F172A] border border-slate-800 rounded-xl py-2 pl-9 pr-4 text-white w-72 text-sm outline-none focus:border-indigo-500 transition-all"/></div>
+                    <div className="p-4 sm:p-6 h-full overflow-y-auto ds">
+                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-5">
+                            <div><h2 className="text-xl sm:text-2xl font-black text-white">Sales History</h2><p className="text-slate-500 text-xs sm:text-sm mt-0.5">All your past transactions</p></div>
+                            <div className="relative w-full sm:w-auto"><FiSearch className="absolute left-3 top-2.5 text-slate-500" size={13}/><input type="text" placeholder="Search invoice, name, phone…" onChange={e=>setHistorySearch(e.target.value)} className="bg-[#0F172A] border border-slate-800 rounded-xl py-2 pl-9 pr-4 text-white w-full sm:w-72 text-sm outline-none focus:border-indigo-500 transition-all"/></div>
                         </div>
                         <div className="bg-[#0F172A] rounded-2xl border border-slate-800 overflow-hidden">
+                            <div className="overflow-x-auto">
                             <table className="w-full text-left text-sm text-slate-300">
                                 <thead className="bg-[#131C31] text-[10px] font-black uppercase tracking-widest text-slate-500 border-b border-slate-800">
                                     <tr>{['Invoice','Customer','Items','Amount','Date',''].map(h=><th key={h} className="p-4">{h}</th>)}</tr>
@@ -1216,9 +1303,10 @@ if (oR.status==='fulfilled') {
                                                 </tr>
                                             );
                                         })}
-                                    {salesHistory.length===0&&<tr><td colSpan="6" className="p-10 text-center text-slate-500 text-sm">No sales history yet.</td></tr>}
+                                 {salesHistory.length===0&&<tr><td colSpan="6" className="p-10 text-center text-slate-500 text-sm">No sales history yet.</td></tr>}
                                 </tbody>
                             </table>
+                            </div>{/* end overflow-x-auto */}
                         </div>
                     </div>
                 )}

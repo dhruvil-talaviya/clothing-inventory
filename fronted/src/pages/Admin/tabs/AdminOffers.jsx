@@ -12,7 +12,7 @@ const AdminOffers = () => {
     const [confirmDeleteId, setConfirmDeleteId] = useState(null); // ← NEW
 
     const [newOffer, setNewOffer] = useState({
-        name: '', code: '', discountPercent: '', minOrderValue: '', validUntil: ''
+        name: '', code: '', discountPercent: '', minOrderValue: '', startDate: '', validUntil: ''
     });
 
     useEffect(() => { fetchOffers(); }, []);
@@ -39,10 +39,11 @@ const AdminOffers = () => {
                 code:            newOffer.code.toUpperCase(),
                 discountPercent: Number(newOffer.discountPercent),
                 minOrderValue:   Number(newOffer.minOrderValue),
+                startDate:       newOffer.startDate ? new Date(newOffer.startDate).toISOString() : new Date().toISOString(),
                 validUntil:      new Date(newOffer.validUntil).toISOString(),
             });
             notify('Coupon created successfully!');
-            setNewOffer({ name:'', code:'', discountPercent:'', minOrderValue:'', validUntil:'' });
+            setNewOffer({ name:'', code:'', discountPercent:'', minOrderValue:'', startDate:'', validUntil:'' });
             fetchOffers();
         } catch (err) {
             notify(err.response?.data?.message || 'Connection error — is the backend running?', 'error');
@@ -59,7 +60,8 @@ const AdminOffers = () => {
     };
 
     const getTodayString = () => new Date().toISOString().split('T')[0];
-    const isExpired = (validUntil) => validUntil && new Date(validUntil) < new Date();
+    const isExpired = (validUntil) => validUntil && new Date(validUntil) < new Date(new Date().setHours(0,0,0,0));
+    const isPending = (startDate) => startDate && new Date(startDate) > new Date(new Date().setHours(23,59,59,999));
 
     return (
         <div className="space-y-8 pb-10 relative">
@@ -125,10 +127,19 @@ const AdminOffers = () => {
                         </div>
                     </div>
 
-                    {/* Valid Until */}
+                    {/* Start Date */}
+                    <div>
+                        <label className="block text-slate-400 text-xs font-black uppercase tracking-wider mb-2">Start Date</label>
+                        <input required type="date" min={getTodayString()} style={{colorScheme:'dark'}}
+                            className="w-full bg-[#0f172a] border border-slate-700 rounded-xl px-4 py-3 text-white focus:border-indigo-500 outline-none transition-all"
+                            value={newOffer.startDate} onChange={e=>setNewOffer({...newOffer, startDate:e.target.value})}
+                            onClick={e=>e.target.showPicker?.()}/>
+                    </div>
+
+                    {/* Valid Until (End Date) */}
                     <div>
                         <label className="block text-slate-400 text-xs font-black uppercase tracking-wider mb-2">Valid Until</label>
-                        <input required type="date" min={getTodayString()} style={{colorScheme:'dark'}}
+                        <input required type="date" min={newOffer.startDate || getTodayString()} style={{colorScheme:'dark'}}
                             className="w-full bg-[#0f172a] border border-slate-700 rounded-xl px-4 py-3 text-white focus:border-indigo-500 outline-none transition-all"
                             value={newOffer.validUntil} onChange={e=>setNewOffer({...newOffer, validUntil:e.target.value})}
                             onClick={e=>e.target.showPicker?.()}/>
@@ -150,7 +161,7 @@ const AdminOffers = () => {
                     Active Coupons
                     {offers.length > 0 && (
                         <span className="text-xs font-black bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2.5 py-1 rounded-full">
-                            {offers.filter(o => !isExpired(o.validUntil)).length} active
+                            {offers.filter(o => !isExpired(o.validUntil) && !isPending(o.startDate)).length} active
                         </span>
                     )}
                 </h3>
@@ -167,6 +178,8 @@ const AdminOffers = () => {
                     </div>
                 ) : offers.map(offer => {
                     const expired  = isExpired(offer.validUntil);
+                    const pending  = isPending(offer.startDate);
+                    const notActive = expired || pending;
                     const discVal  = offer.value || offer.discountPercent || 0;
                     const minOrd   = offer.minOrder || offer.minOrderValue || 0;
                     const deleting = confirmDeleteId === offer._id;
@@ -174,7 +187,7 @@ const AdminOffers = () => {
                     return (
                         <div key={offer._id}
                             className={`relative bg-[#1e293b] rounded-2xl border-dashed border p-6 transition-all group overflow-hidden
-                                ${expired ? 'border-slate-700 opacity-60' : 'border-slate-600 hover:border-indigo-500'}`}>
+                                ${notActive ? 'border-slate-700 opacity-60' : 'border-slate-600 hover:border-indigo-500'}`}>
 
                             {/* Ticket cut-outs */}
                             <div className="absolute -left-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-[#0f172a] rounded-full"/>
@@ -227,20 +240,26 @@ const AdminOffers = () => {
                             </div>
 
                             {/* Footer */}
-                            <div className="mt-4 pt-4 border-t border-slate-700/50 flex justify-between items-center text-xs">
-                                <span className="text-slate-400 flex items-center gap-1.5">
-                                    <FiCalendar size={11}/>
-                                    {offer.validUntil ? new Date(offer.validUntil).toLocaleDateString('en-IN', {day:'numeric',month:'short',year:'numeric'}) : 'No Expiry'}
-                                </span>
-                                {expired ? (
-                                    <span className="flex items-center gap-1 text-red-400 font-bold text-[10px]">
-                                        <span className="w-2 h-2 rounded-full bg-red-500"/> Expired
+                            <div className="mt-4 pt-4 border-t border-slate-700/50 flex flex-col gap-2 text-xs">
+                                <div className="flex justify-between items-center w-full">
+                                    <span className="text-slate-400 flex items-center gap-1.5">
+                                        <FiCalendar size={11}/>
+                                        {offer.startDate ? new Date(offer.startDate).toLocaleDateString('en-IN', {day:'numeric',month:'short'}) : 'Now'} → {offer.validUntil ? new Date(offer.validUntil).toLocaleDateString('en-IN', {day:'numeric',month:'short',year:'numeric'}) : 'No Expiry'}
                                     </span>
-                                ) : (
-                                    <span className="flex items-center gap-1 text-emerald-400 font-bold text-[10px]">
-                                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"/> Active
-                                    </span>
-                                )}
+                                    {expired ? (
+                                        <span className="flex items-center gap-1 text-red-400 font-bold text-[10px]">
+                                            <span className="w-2 h-2 rounded-full bg-red-500"/> Expired
+                                        </span>
+                                    ) : pending ? (
+                                        <span className="flex items-center gap-1 text-amber-400 font-bold text-[10px]">
+                                            <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"/> Upcoming
+                                        </span>
+                                    ) : (
+                                        <span className="flex items-center gap-1 text-emerald-400 font-bold text-[10px]">
+                                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"/> Active
+                                        </span>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     );

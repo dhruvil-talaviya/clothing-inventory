@@ -2,7 +2,38 @@
 @tailwind components;
 @tailwind utilities;
 
-
 * {
-    font-family: 'Roboto', sans-serif;
-  }
+  font-family: 'Roboto', sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  /* Use dvh (dynamic viewport height) so mobile browser chrome doesn't cause overflow */
+  min-height: 100dvh;
+}
+
+body {
+  overflow-x: hidden;
+  overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* Safe-area padding for iPhones with notch/home indicator */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Smooth scrolling on iOS */
+.smooth-scroll {
+  -webkit-overflow-scrolling: touch;
+  overflow-y: auto;
+}
+
+/* Prevent text selection on nav/button elements */
+nav, button {
+  user-select: none;
+  -webkit-user-select: none;
+}
