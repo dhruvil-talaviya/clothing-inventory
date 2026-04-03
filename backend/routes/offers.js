@@ -17,7 +17,7 @@ router.get('/', async (req, res) => {
 // CREATE NEW OFFER
 router.post('/', async (req, res) => {
     try {
-        const { name, code, discountPercent, minOrderValue, validUntil } = req.body;
+        const { name, code, discountPercent, minOrderValue, startDate, validUntil } = req.body;
 
         // Translation: Mapping Frontend -> Database fields
         const newDiscount = new Discount({
@@ -25,6 +25,7 @@ router.post('/', async (req, res) => {
             code: code.toUpperCase(),
             value: Number(discountPercent), // 'discountPercent' becomes 'value'
             minOrder: Number(minOrderValue), // 'minOrderValue' becomes 'minOrder'
+            startDate: startDate,
             validUntil: validUntil
         });
 
