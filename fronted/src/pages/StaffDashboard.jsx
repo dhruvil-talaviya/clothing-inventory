@@ -518,6 +518,8 @@ const StaffDashboard = () => {
     const [showCoupons,      setShowCoupons]      = useState(false);
 
     const [historySearch, setHistorySearch] = useState('');
+    const [historyPage,   setHistoryPage]   = useState(1);
+    const HISTORY_PER_PAGE = 20;
     const [selectedSale,  setSelectedSale]  = useState(null);
     const [invoiceEmail,  setInvoiceEmail]  = useState('');
     const [emailSending,  setEmailSending]  = useState(false);
@@ -1420,40 +1422,144 @@ const StaffDashboard = () => {
                 )}
 
                 {/* ══ HISTORY ══ */}
-                {view==='history'&&(
+                {view==='history'&&(()=>{
+                    const filteredHistory = salesHistory.filter(h=>{
+                        const q = historySearch.toLowerCase();
+                        return safeStr(h.invoiceId||h._id).toLowerCase().includes(q)
+                            || safeStr(h.customerName).toLowerCase().includes(q)
+                            || safeStr(h.customerPhone).includes(q);
+                    });
+                    const totalPages = Math.max(1, Math.ceil(filteredHistory.length / HISTORY_PER_PAGE));
+                    const safePage   = Math.min(historyPage, totalPages);
+                    const pageStart  = (safePage - 1) * HISTORY_PER_PAGE;
+                    const pageRows   = filteredHistory.slice(pageStart, pageStart + HISTORY_PER_PAGE);
+                    return (
                     <div className="p-4 sm:p-6 h-full overflow-y-auto ds">
+                        {/* Header */}
                         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-5">
-                            <div><h2 className="text-xl sm:text-2xl font-black text-white">Sales History</h2><p className="text-slate-500 text-xs sm:text-sm mt-0.5">All your past transactions</p></div>
-                            <div className="relative w-full sm:w-auto"><FiSearch className="absolute left-3 top-2.5 text-slate-500" size={13}/><input type="text" placeholder="Search invoice, name, phone…" onChange={e=>setHistorySearch(e.target.value)} className="bg-[#0F172A] border border-slate-800 rounded-xl py-2 pl-9 pr-4 text-white w-full sm:w-72 text-sm outline-none focus:border-indigo-500 transition-all"/></div>
+                            <div>
+                                <h2 className="text-xl sm:text-2xl font-black text-white">Sales History</h2>
+                                <p className="text-slate-500 text-xs sm:text-sm mt-0.5">
+                                    {filteredHistory.length} transaction{filteredHistory.length!==1?'s':''}
+                                    {historySearch && <span className="text-indigo-400"> matching "{historySearch}"</span>}
+                                </p>
+                            </div>
+                            <div className="relative w-full sm:w-auto">
+                                <FiSearch className="absolute left-3 top-2.5 text-slate-500" size={13}/>
+                                <input
+                                    type="text"
+                                    placeholder="Search invoice, name, phone…"
+                                    onChange={e=>{ setHistorySearch(e.target.value); setHistoryPage(1); }}
+                                    className="bg-[#0F172A] border border-slate-800 rounded-xl py-2 pl-9 pr-4 text-white w-full sm:w-72 text-sm outline-none focus:border-indigo-500 transition-all"
+                                />
+                            </div>
                         </div>
+
+                        {/* Table */}
                         <div className="bg-[#0F172A] rounded-2xl border border-slate-800 overflow-hidden">
                             <div className="overflow-x-auto">
-                            <table className="w-full text-left text-sm text-slate-300">
-                                <thead className="bg-[#131C31] text-[10px] font-black uppercase tracking-widest text-slate-500 border-b border-slate-800">
-                                    <tr>{['Invoice','Customer','Items','Amount','Date',''].map(h=><th key={h} className="p-4">{h}</th>)}</tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-800/50">
-                                    {salesHistory.filter(h=>{ const q=historySearch.toLowerCase(); return safeStr(h.invoiceId||h._id).toLowerCase().includes(q)||safeStr(h.customerName).toLowerCase().includes(q)||safeStr(h.customerPhone).includes(q); })
-                                        .map(s=>{
-                                            const qty=safeArr(s.items).reduce((a,i)=>a+safeNum(i.quantity,1),0);
+                                <table className="w-full text-left text-sm text-slate-300">
+                                    <thead className="bg-[#131C31] text-[10px] font-black uppercase tracking-widest text-slate-500 border-b border-slate-800">
+                                        <tr>
+                                            {['#','Invoice','Customer','Items','Payment','Amount','Date',''].map(h=>(
+                                                <th key={h} className="p-4 whitespace-nowrap">{h}</th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-800/50">
+                                        {pageRows.length === 0 ? (
+                                            <tr><td colSpan="8" className="p-10 text-center text-slate-500 text-sm">
+                                                {historySearch ? 'No results found. Try a different search.' : 'No sales history yet.'}
+                                            </td></tr>
+                                        ) : pageRows.map((s, i) => {
+                                            const qty    = safeArr(s.items).reduce((a,it)=>a+safeNum(it.quantity,1),0);
+                                            const payKey = (s.paymentMethod||'cash').toLowerCase();
+                                            const payConf = {
+                                                cash:{label:'Cash',cls:'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'},
+                                                upi: {label:'UPI', cls:'text-violet-400  bg-violet-500/10  border-violet-500/20'},
+                                                card:{label:'Card',cls:'text-blue-400    bg-blue-500/10    border-blue-500/20'},
+                                            };
+                                            const pay = payConf[payKey] || payConf.cash;
                                             return (
                                                 <tr key={s._id} className="hover:bg-slate-800/30 transition-colors">
-                                                    <td className="p-4 font-mono text-indigo-400 font-bold text-xs">{safeStr(s.invoiceId)||('#'+safeStr(s._id).slice(-6).toUpperCase())}</td>
-                                                    <td className="p-4"><p className="font-bold text-white text-sm">{safeStr(s.customerName,'Walk-in')}</p><p className="text-xs text-slate-500">{safeStr(s.customerPhone,'N/A')}</p></td>
-                                                    <td className="p-4"><span className="bg-slate-800 text-slate-300 px-2.5 py-0.5 rounded-full text-xs font-bold">{qty} units</span></td>
-                                                    <td className="p-4 font-black text-emerald-400 text-sm">Rs.{safeNum(s.totalAmount).toFixed(2)}</td>
-                                                    <td className="p-4 text-slate-400 text-xs">{new Date(s.date||s.createdAt).toLocaleString([],{dateStyle:'medium',timeStyle:'short'})}</td>
-                                                    <td className="p-4 text-right"><button onClick={()=>setSelectedSale(s)} className="p-1.5 bg-slate-800 text-slate-400 hover:text-white rounded-lg transition-all"><FiEye size={13}/></button></td>
+                                                    <td className="p-4 text-slate-600 text-xs font-mono">{pageStart+i+1}</td>
+                                                    <td className="p-4 font-mono text-indigo-400 font-bold text-xs whitespace-nowrap">
+                                                        {safeStr(s.invoiceId)||('#'+safeStr(s._id).slice(-6).toUpperCase())}
+                                                    </td>
+                                                    <td className="p-4">
+                                                        <p className="font-bold text-white text-sm">{safeStr(s.customerName,'Walk-in')}</p>
+                                                        <p className="text-xs text-slate-500">{safeStr(s.customerPhone,'—')}</p>
+                                                    </td>
+                                                    <td className="p-4">
+                                                        <span className="bg-slate-800 text-slate-300 px-2.5 py-0.5 rounded-full text-xs font-bold">{qty} unit{qty!==1?'s':''}</span>
+                                                    </td>
+                                                    <td className="p-4">
+                                                        <span className={`text-[10px] px-2 py-0.5 rounded-lg border font-black uppercase tracking-wider ${pay.cls}`}>{pay.label}</span>
+                                                    </td>
+                                                    <td className="p-4 font-black text-emerald-400 text-sm whitespace-nowrap">Rs.{safeNum(s.totalAmount).toFixed(2)}</td>
+                                                    <td className="p-4 text-slate-400 text-xs whitespace-nowrap">
+                                                        {new Date(s.date||s.createdAt).toLocaleString([],{dateStyle:'medium',timeStyle:'short'})}
+                                                    </td>
+                                                    <td className="p-4 text-right">
+                                                        <button onClick={()=>setSelectedSale(s)} className="p-1.5 bg-slate-800 text-slate-400 hover:text-white rounded-lg transition-all">
+                                                            <FiEye size={13}/>
+                                                        </button>
+                                                    </td>
                                                 </tr>
                                             );
                                         })}
-                                 {salesHistory.length===0&&<tr><td colSpan="6" className="p-10 text-center text-slate-500 text-sm">No sales history yet.</td></tr>}
-                                </tbody>
-                            </table>
-                            </div>{/* end overflow-x-auto */}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {/* ── Pagination Footer ── */}
+                            {totalPages > 1 && (
+                                <div className="flex items-center justify-between px-4 py-3 border-t border-slate-800 bg-[#0a0f1e]/60">
+                                    <p className="text-xs text-slate-500">
+                                        Showing{' '}
+                                        <span className="text-white font-bold">{pageStart+1}–{Math.min(pageStart+HISTORY_PER_PAGE, filteredHistory.length)}</span>
+                                        {' '}of{' '}
+                                        <span className="text-white font-bold">{filteredHistory.length}</span>
+                                    </p>
+                                    <div className="flex items-center gap-1">
+                                        {/* Prev */}
+                                        <button
+                                            onClick={()=>setHistoryPage(p=>Math.max(1,p-1))}
+                                            disabled={safePage<=1}
+                                            className="px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-800 bg-slate-900 text-slate-400 hover:text-white hover:border-slate-600 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                                        >← Prev</button>
+
+                                        {/* Page numbers */}
+                                        {Array.from({length:totalPages},(_,i)=>i+1)
+                                            .filter(p=> p===1 || p===totalPages || Math.abs(p-safePage)<=1)
+                                            .reduce((acc,p,idx,arr)=>{
+                                                if(idx>0 && p-arr[idx-1]>1) acc.push('…');
+                                                acc.push(p);
+                                                return acc;
+                                            },[])
+                                            .map((p,idx)=> typeof p==='string' ? (
+                                                <span key={'dot'+idx} className="px-1 text-slate-600 text-xs select-none">…</span>
+                                            ) : (
+                                                <button key={p} onClick={()=>setHistoryPage(p)}
+                                                    className={`w-8 h-8 text-xs font-bold rounded-lg border transition-all ${p===safePage?'bg-indigo-600 text-white border-indigo-500':'bg-slate-900 text-slate-400 border-slate-800 hover:text-white hover:border-slate-600'}`}>
+                                                    {p}
+                                                </button>
+                                            ))
+                                        }
+
+                                        {/* Next */}
+                                        <button
+                                            onClick={()=>setHistoryPage(p=>Math.min(totalPages,p+1))}
+                                            disabled={safePage>=totalPages}
+                                            className="px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-800 bg-slate-900 text-slate-400 hover:text-white hover:border-slate-600 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                                        >Next →</button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
-                )}
+                    );
+                })()}
 
                 {/* ══ EVENTS ══ */}
                 {view==='events'&&(
