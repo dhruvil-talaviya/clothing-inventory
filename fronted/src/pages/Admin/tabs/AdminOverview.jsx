@@ -29,7 +29,7 @@ const normalisePayment = (raw) => {
 };
 
 const PAYMENT_META = {
-    cash: { label:'Cash',       icon:<FiDollarSign size={16}/>,   color:'emerald', hex:'#10b981', bg:'bg-emerald-500/10', border:'border-emerald-500/20', text:'text-emerald-400' },
+    cash: { label:'Cash',       icon:<span className="font-bold leading-none pr-0.5 text-sm">₹</span>, color:'emerald', hex:'#10b981', bg:'bg-emerald-500/10', border:'border-emerald-500/20', text:'text-emerald-400' },
     upi:  { label:'UPI',        icon:<FiSmartphone size={16}/>,   color:'violet',  hex:'#8b5cf6', bg:'bg-violet-500/10',  border:'border-violet-500/20',  text:'text-violet-400'  },
     card: { label:'Card',       icon:<FiCreditCard size={16}/>,   color:'sky',     hex:'#0ea5e9', bg:'bg-sky-500/10',     border:'border-sky-500/20',     text:'text-sky-400'     },
 };
@@ -168,7 +168,7 @@ const StatCard = ({ title, value, icon, color, onClick, badge, profitValue, toda
                             <span className="text-blue-300 font-black text-sm">{todayOrders}</span>
                         </div>
                         <div className="flex flex-col items-end">
-                            <span className="text-slate-500 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1"><FiDollarSign size={9}/> Sales</span>
+                            <span className="text-slate-500 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1"><span className="font-bold">₹</span> Sales</span>
                             <span className="text-blue-300 font-black text-sm">₹{fmt(value)}</span>
                         </div>
                     </div>
@@ -187,61 +187,102 @@ const StatCard = ({ title, value, icon, color, onClick, badge, profitValue, toda
 // ─── Payment Method Mini Card ─────────────────────────────────────────────────
 
 const SalesTable = ({ data, onViewSale }) => {
+    const [page, setPage] = useState(1);
+    useEffect(() => { setPage(1); }, [data]);
+
     if (!data?.length) return <div className="p-10 text-center text-slate-500">No transactions found.</div>;
+
+    const PER_PAGE = 20;
+    const totalPages = Math.max(1, Math.ceil(data.length / PER_PAGE));
+    const safePage = Math.min(page, totalPages);
+    const pageStart = (safePage - 1) * PER_PAGE;
+    const pageRows = data.slice(pageStart, pageStart + PER_PAGE);
+
     return (
-        <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-slate-300">
-                <thead className="bg-[#1e293b] text-xs font-bold uppercase text-slate-500 sticky top-0 z-10">
-                    <tr>
-                        <th className="p-4 pl-6">Order ID</th>
-                        <th className="p-4">Date</th>
-                        <th className="p-4">Staff</th>
-                        <th className="p-4">Customer</th>
-                        <th className="p-4 text-center">Payment</th>
-                        <th className="p-4 text-center">Discount</th>
-                        <th className="p-4 text-right">Amount</th>
-                        <th className="p-4 pr-6 text-center">Details</th>
-                    </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/50">
-                    {data.map(sale => {
-                        const date = parseDate(sale.date || sale.createdAt);
-                        return (
-                            <tr key={sale._id} className="hover:bg-slate-800/30 transition-colors">
-                                <td className="p-4 pl-6 font-mono text-indigo-400 font-bold text-xs">#{sale._id?.slice(-6).toUpperCase()}</td>
-                                <td className="p-4 text-xs font-semibold text-white whitespace-nowrap">{date ? date.toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' }) : '--'}</td>
-                                <td className="p-4">
-                                    {sale.staffName && sale.staffName !== 'N/A' ? (
-                                        <div className="flex flex-col gap-1">
-                                            <span className="text-white text-xs font-semibold flex items-center gap-1"><FiUser size={10} className="text-slate-500 shrink-0"/>{sale.staffName}</span>
-                                            {sale.staffId && sale.staffId !== 'N/A' && <span className="font-mono text-indigo-300 bg-indigo-500/10 border border-indigo-500/20 px-1.5 py-0.5 rounded text-[10px] w-fit">{sale.staffId}</span>}
-                                        </div>
-                                    ) : <span className="text-slate-600 text-xs">--</span>}
-                                </td>
-                                <td className="p-4">
-                                    <span className="text-white text-xs font-semibold block">{sale.customerName || 'Walk-in'}</span>
-                                    {sale.customerPhone && sale.customerPhone !== '--' && <span className="text-slate-500 font-mono text-[10px]">{sale.customerPhone}</span>}
-                                </td>
-                                {/* Payment method column */}
-                                <td className="p-4 text-center">
-                                    <PaymentBadge method={sale.paymentMethod} />
-                                </td>
-                                <td className="p-4 text-center">
-                                    {sale.couponApplied
-                                        ? <span className="text-emerald-400 text-[10px] border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 rounded-full font-bold">Applied</span>
-                                        : <span className="text-slate-600 text-xs">--</span>}
-                                </td>
-                                <td className="p-4 text-right font-black text-white text-sm whitespace-nowrap">₹{Number(sale.totalAmount||0).toFixed(2)}</td>
-                                <td className="p-4 pr-6 text-center">
-                                    <button onClick={() => onViewSale(sale)} className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-slate-700/60 hover:bg-indigo-500/20 border border-slate-600 hover:border-indigo-500/40 text-slate-400 hover:text-indigo-400 transition-all">
-                                        <FiEye size={14}/>
-                                    </button>
-                                </td>
-                            </tr>
-                        );
-                    })}
-                </tbody>
-            </table>
+        <div className="flex flex-col h-full">
+            <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm text-slate-300">
+                    <thead className="bg-[#1e293b] text-xs font-bold uppercase text-slate-500 sticky top-0 z-10">
+                        <tr>
+                            <th className="p-4 pl-6">Order ID</th>
+                            <th className="p-4">Date</th>
+                            <th className="p-4">Staff</th>
+                            <th className="p-4">Customer</th>
+                            <th className="p-4 text-center">Payment</th>
+                            <th className="p-4 text-center">Discount</th>
+                            <th className="p-4 text-right">Amount</th>
+                            <th className="p-4 pr-6 text-center">Details</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/50">
+                        {pageRows.map(sale => {
+                            const date = parseDate(sale.date || sale.createdAt);
+                            return (
+                                <tr key={sale._id} className="hover:bg-slate-800/30 transition-colors">
+                                    <td className="p-4 pl-6 font-mono text-indigo-400 font-bold text-xs">#{sale._id?.slice(-6).toUpperCase()}</td>
+                                    <td className="p-4 text-xs font-semibold text-white whitespace-nowrap">{date ? date.toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' }) : '--'}</td>
+                                    <td className="p-4">
+                                        {sale.staffName && sale.staffName !== 'N/A' ? (
+                                            <div className="flex flex-col gap-1">
+                                                <span className="text-white text-xs font-semibold flex items-center gap-1"><FiUser size={10} className="text-slate-500 shrink-0"/>{sale.staffName}</span>
+                                                {sale.staffId && sale.staffId !== 'N/A' && <span className="font-mono text-indigo-300 bg-indigo-500/10 border border-indigo-500/20 px-1.5 py-0.5 rounded text-[10px] w-fit">{sale.staffId}</span>}
+                                            </div>
+                                        ) : <span className="text-slate-600 text-xs">--</span>}
+                                    </td>
+                                    <td className="p-4">
+                                        <span className="text-white text-xs font-semibold block">{sale.customerName || 'Walk-in'}</span>
+                                        {sale.customerPhone && sale.customerPhone !== '--' && <span className="text-slate-500 font-mono text-[10px]">{sale.customerPhone}</span>}
+                                    </td>
+                                    {/* Payment method column */}
+                                    <td className="p-4 text-center">
+                                        <PaymentBadge method={sale.paymentMethod} />
+                                    </td>
+                                    <td className="p-4 text-center">
+                                        {sale.couponApplied
+                                            ? <span className="text-emerald-400 text-[10px] border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 rounded-full font-bold">Applied</span>
+                                            : <span className="text-slate-600 text-xs">--</span>}
+                                    </td>
+                                    <td className="p-4 text-right font-black text-white text-sm whitespace-nowrap">₹{Number(sale.totalAmount||0).toFixed(2)}</td>
+                                    <td className="p-4 pr-6 text-center">
+                                        <button onClick={() => onViewSale(sale)} className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-slate-700/60 hover:bg-indigo-500/20 border border-slate-600 hover:border-indigo-500/40 text-slate-400 hover:text-indigo-400 transition-all">
+                                            <FiEye size={14}/>
+                                        </button>
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            </div>
+            {/* ── Pagination Footer ── */}
+            {totalPages > 1 && (
+                <div className="flex items-center justify-between px-6 py-3 border-t border-slate-800 bg-[#0f172a]/80">
+                    <div className="flex-1 text-xs text-slate-500 hidden sm:block">
+                        Showing <span className="text-white font-bold">{pageStart+1}–{Math.min(pageStart+PER_PAGE, data.length)}</span> of <span className="text-white font-bold">{data.length}</span>
+                    </div>
+                    <div className="flex items-center justify-center gap-4 flex-1 sm:flex-none w-full sm:w-auto">
+                        {/* Prev */}
+                        <button
+                            onClick={()=>setPage(p=>Math.max(1,p-1))}
+                            disabled={safePage<=1}
+                            className="px-4 py-1.5 text-xs font-bold rounded-lg border border-slate-700 bg-[#1e293b] text-slate-400 hover:text-white hover:border-slate-500 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                        >← Prev</button>
+
+                        {/* Page Indicator */}
+                        <div className="text-xs font-medium text-slate-400">
+                            Page <span className="text-white font-bold">{safePage}</span> of {totalPages}
+                        </div>
+
+                        {/* Next */}
+                        <button
+                            onClick={()=>setPage(p=>Math.min(totalPages,p+1))}
+                            disabled={safePage>=totalPages}
+                            className="px-4 py-1.5 text-xs font-bold rounded-lg border border-slate-700 bg-[#1e293b] text-slate-400 hover:text-white hover:border-slate-500 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                        >Next →</button>
+                    </div>
+                    <div className="flex-1 hidden sm:block"></div>
+                </div>
+            )}
         </div>
     );
 };
