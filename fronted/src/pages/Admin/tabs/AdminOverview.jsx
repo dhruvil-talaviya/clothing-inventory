@@ -47,7 +47,7 @@ const PaymentBadge = ({ method }) => {
     const meta = PAYMENT_META[m];
     return (
         <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${meta.bg} ${meta.text} ${meta.border}`}>
-            {React.cloneElement(meta.icon, { size: 9 })} {meta.label}
+            {m === 'cash' ? meta.icon : React.cloneElement(meta.icon, { size: 10 })} {meta.label}
         </span>
     );
 };
