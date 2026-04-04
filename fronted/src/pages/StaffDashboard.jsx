@@ -1097,57 +1097,76 @@ const StaffDashboard = () => {
                                 )}
                             </div>
 
-                            {/* Recent Sales Feed */}
+                            {/* Live Activity Feed */}
                             <div className="lg:col-span-2">
-                                <h2 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2"><FiClock/> Live Activity Feed</h2>
-                                <div className="bg-[#0f172a]/80 backdrop-blur-lg rounded-3xl border border-slate-700/60 overflow-hidden">
-                                     {salesHistory.length === 0 ? (
-                                        <div className="p-10 flex flex-col items-center justify-center text-center">
-                                            <FiShoppingCart size={32} className="text-slate-600 mb-3"/>
-                                            <p className="text-slate-400 font-bold">Waiting for first sale...</p>
+                                <div className="flex items-center justify-between mb-4">
+                                    <h2 className="text-sm font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                        <span className="relative flex h-1.5 w-1.5 shrink-0">
+                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                                            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-indigo-500"></span>
+                                        </span>
+                                        Live Activity Feed
+                                    </h2>
+                                    {salesHistory.length > 0 && (
+                                        <button onClick={()=>setView('history')} className="text-[10px] text-indigo-400 font-bold hover:text-indigo-300 transition-colors uppercase tracking-widest">
+                                            View all →
+                                        </button>
+                                    )}
+                                </div>
+                                <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+                                    <div className="px-4 py-2.5 border-b border-slate-800 bg-slate-950/40 flex items-center justify-between">
+                                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-600">Recent Transactions</span>
+                                        <span className="text-[9px] text-slate-700">Showing {Math.min(salesHistory.length,5)} of {salesHistory.length}</span>
+                                    </div>
+                                    {salesHistory.length === 0 ? (
+                                        <div className="flex flex-col items-center justify-center text-center py-12 px-6">
+                                            <div className="w-12 h-12 bg-slate-800 rounded-full flex items-center justify-center mb-3">
+                                                <FiShoppingCart size={20} className="text-slate-600"/>
+                                            </div>
+                                            <p className="text-sm font-bold text-slate-400">No sales yet today</p>
+                                            <p className="text-xs text-slate-600 mt-1">Complete a transaction to see it here</p>
                                         </div>
-                                     ) : (
-                                        <div className="divide-y divide-slate-800/50">
+                                    ) : (
+                                        <div className="divide-y divide-slate-800/60">
                                             {salesHistory.slice(0, 5).map((sale, idx) => {
-                                                const qty = safeArr(sale.items).reduce((s,i)=>s+safeNum(i.quantity,1),0);
-                                                const payType = (sale.paymentMethod || 'cash').toLowerCase();
-                                                const isCash = payType === 'cash';
-                                                const isUpi = payType === 'upi';
+                                                const qty     = safeArr(sale.items).reduce((s,i)=>s+safeNum(i.quantity,1),0);
+                                                const payKey  = (sale.paymentMethod || 'cash').toLowerCase();
+                                                const payConf = {
+                                                    cash: {label:'Cash', cls:'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'},
+                                                    upi:  {label:'UPI',  cls:'text-violet-400 bg-violet-500/10 border-violet-500/20'},
+                                                    card: {label:'Card', cls:'text-blue-400 bg-blue-500/10 border-blue-500/20'},
+                                                };
+                                                const pay     = payConf[payKey] || payConf.cash;
+                                                const timeStr = new Date(sale.date||sale.createdAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+                                                const isFirst = idx === 0;
                                                 return (
-                                                    <div key={sale._id} className="flex items-center justify-between p-4 sm:p-5 hover:bg-slate-800/30 transition-colors group">
-                                                        <div className="flex items-center gap-4">
-                                                            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-slate-800 flex flex-col items-center justify-center border border-slate-700 group-hover:border-indigo-500/50 transition-colors shrink-0">
-                                                                <span className="text-[10px] text-slate-500 font-black uppercase tracking-widest leading-none mb-0.5">Qty</span>
-                                                                <span className="text-sm font-black text-white leading-none">{qty}</span>
+                                                    <div key={sale._id} className={`flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-slate-800/40 ${isFirst ? 'bg-indigo-500/5' : ''}`}>
+                                                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 border ${isFirst ? 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30' : 'bg-slate-800 text-slate-600 border-slate-700'}`}>
+                                                            {idx+1}
+                                                        </div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="flex items-center gap-2 flex-wrap">
+                                                                <p className="font-semibold text-white text-sm truncate">{safeStr(sale.customerName,'Walk-in')}</p>
+                                                                {isFirst && <span className="text-[9px] bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 px-1.5 py-0.5 rounded font-black uppercase tracking-widest shrink-0">Latest</span>}
                                                             </div>
-                                                            <div>
-                                                                <p className="font-bold text-white text-sm sm:text-base flex items-center gap-2">
-                                                                    {safeStr(sale.customerName,'Walk-in Customer')}
-                                                                    {idx === 0 && <span className="bg-emerald-500/20 text-emerald-400 text-[9px] px-1.5 py-0.5 rounded border border-emerald-500/30 uppercase tracking-widest">New</span>}
-                                                                </p>
-                                                                <p className="text-xs text-slate-500 mt-1 flex items-center gap-1.5">
-                                                                    <FiClock size={10}/> {new Date(sale.date||sale.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
-                                                                </p>
+                                                            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                                                <span className="text-[10px] text-slate-600 flex items-center gap-1"><FiClock size={9}/> {timeStr}</span>
+                                                                <span className="text-[10px] text-slate-700">·</span>
+                                                                <span className="text-[10px] text-slate-600">{qty} item{qty!==1?'s':''}</span>
+                                                                <span className={`text-[9px] px-1.5 py-0.5 rounded border font-black uppercase tracking-widest ${pay.cls}`}>{pay.label}</span>
                                                             </div>
                                                         </div>
-                                                        <div className="flex items-center gap-4 sm:gap-6">
-                                                            <div className="hidden sm:block">
-                                                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${isCash ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : isUpi ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : 'bg-blue-500/10 text-blue-400 border-blue-500/20'}`}>
-                                                                    {payType}
-                                                                </span>
-                                                            </div>
-                                                            <div className="text-right flex flex-col items-end">
-                                                                <p className="font-mono font-black text-white text-sm sm:text-base">Rs. {safeNum(sale.totalAmount).toFixed(2)}</p>
-                                                                <button onClick={()=>setSelectedSale(sale)} className="text-[10px] font-bold text-indigo-400 hover:text-indigo-300 mt-1 uppercase tracking-widest transition-colors flex items-center gap-1">
-                                                                    Invoice <FiEye size={10}/>
-                                                                </button>
-                                                            </div>
+                                                        <div className="flex flex-col items-end shrink-0 gap-1">
+                                                            <p className="font-mono font-black text-white text-sm">Rs.{safeNum(sale.totalAmount).toFixed(2)}</p>
+                                                            <button onClick={()=>setSelectedSale(sale)} className="flex items-center gap-1 text-[10px] text-slate-500 hover:text-indigo-400 transition-colors uppercase tracking-widest font-medium">
+                                                                <FiEye size={9}/> Invoice
+                                                            </button>
                                                         </div>
                                                     </div>
                                                 );
                                             })}
                                         </div>
-                                     )}
+                                    )}
                                 </div>
                             </div>
                         </div>
