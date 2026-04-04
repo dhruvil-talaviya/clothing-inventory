@@ -1129,9 +1129,23 @@ const AdminInventory = () => {
                                                     justifyContent: 'center',
                                                     breakInside: 'avoid',
                                                 }}>
-                                                    {/* Barcode Component */}
-                                                    <div style={{ textAlign: 'center' }}>
-                                                        <PrintBarcode sku={v.sku} width={1.8} height={50} />
+                                                    {/* Barcode Component Wrapper to prevent overflow */}
+                                                    <div style={{ 
+                                                        width: '100%', 
+                                                        display: 'flex', 
+                                                        justifyContent: 'center',
+                                                        overflow: 'hidden' 
+                                                    }}>
+                                                        <div className="barcode-svg-container" style={{ maxWidth: '100%' }}>
+                                                            {/* Custom CSS to force the generated SVG to scale down if it exceeds container width */}
+                                                            <style>{`
+                                                                .barcode-svg-container svg {
+                                                                    max-width: 100% !important;
+                                                                    height: auto !important;
+                                                                }
+                                                            `}</style>
+                                                            <PrintBarcode sku={v.sku} width={1.2} height={40} />
+                                                        </div>
                                                     </div>
 
                                                     {/* Below Barcode Info: SKU and Size Only */}
