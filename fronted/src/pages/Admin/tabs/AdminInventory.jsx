@@ -6,7 +6,9 @@ import {
     FiGrid, FiList, FiRefreshCw, FiDownload, FiChevronDown, FiChevronRight,
     FiImage, FiUpload, FiBell
 } from 'react-icons/fi';
-import { BiBarcodeReader } from 'react-icons/bi';
+import { BiBarcodeReader, BiPrinter } from 'react-icons/bi';
+import Barcode from 'react-barcode';
+import { useReactToPrint } from 'react-to-print';
 
 const SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
 const CATEGORIES = [
@@ -53,32 +55,16 @@ const getLowStockDetails = (p) => {
         : Number(p.stock || 0) <= 5 ? [{ size: 'Stock', stock: Number(p.stock || 0) }] : [];
 };
 
-// ─── FIX 1: BarcodeDisplay — deterministic, prints properly on white bg ───────
-const BarcodeDisplay = ({ sku, size: bSize = 'sm' }) => {
-    if (!sku) return null;
-    const bars = Array.from(sku).flatMap((c, i) => [
-        { w: (c.charCodeAt(0) % 3) + 1, dark: true  },
-        { w: (i % 2) + 1,               dark: false },
-    ]);
-    bars.push({ w: 3, dark: true });
-    const h = bSize === 'lg' ? 56 : 32;
-    return (
-        <div className="flex flex-col items-center gap-1 w-full">
-            <div className="flex items-end gap-[1px]" style={{ height: h }}>
-                {bars.map((bar, i) => (
-                    <div key={i} style={{
-                        width: bar.w + 1,
-                        height: bar.dark ? '100%' : `${45 + (i % 4) * 14}%`,
-                        background: bar.dark ? '#1e293b' : 'transparent',
-                        borderRadius: 1, flexShrink: 0,
-                    }}/>
-                ))}
-            </div>
-            <span className="text-[9px] font-mono text-slate-600 tracking-widest text-center break-all">
-                {sku}
-            </span>
-        </div>
-    );
+// Professional barcode component — renders Code-128 for SKU labels
+const SafeBarcode = ({ sku, width = 1.5, height = 45, showText = false }) => {
+    if (!sku) return <span style={{ fontSize: 10, color: '#94a3b8' }}>NO SKU</span>;
+    return <Barcode value={sku} width={width} height={height} fontSize={10} margin={0} displayValue={showText} background="transparent" lineColor="#000" />;
+};
+
+// Print-ready barcode for label sheets — black on white, clean
+const PrintBarcode = ({ sku, width = 1.4, height = 38 }) => {
+    if (!sku) return <span style={{ fontSize: 9, color: '#999', fontFamily: 'monospace' }}>NO SKU</span>;
+    return <Barcode value={sku} width={width} height={height} fontSize={0} margin={0} displayValue={false} background="#fff" lineColor="#000" />;
 };
 
 // ─── TOGGLE ───────────────────────────────────────────────────────────────────
@@ -375,8 +361,8 @@ const ProductTableRow = ({ p, stockColor, onBarcode, onEdit, onDelete, onToggle 
                             })}
                         </div>
                     ) : (
-                        <span className={`px-3 py-1.5 rounded-lg font-bold text-xs border ${totalStock <= 5 ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' : totalStock <= 0 ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-slate-800 text-slate-300 border-slate-700'}`}>
-                            {totalStock} units {totalStock <= 5 && '⚠️'}
+                        <span className={`px-3 py-1.5 rounded-lg font-bold text-xs border ${totalStock <= 0 ? 'bg-red-500/10 text-red-400 border-red-500/20' : totalStock <= 5 ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' : 'bg-slate-800 text-slate-300 border-slate-700'}`}>
+                            {totalStock} units {totalStock <= 0 ? '🚫' : totalStock <= 5 ? '⚠️' : ''}
                         </span>
                     )}
                 </td>
@@ -628,6 +614,12 @@ const AdminInventory = () => {
     const [editImageFile,    setEditImageFile]    = useState(null);
     const [editImagePreview, setEditImagePreview] = useState(null);
 
+    const printRef = useRef();
+    const handlePrint = useReactToPrint({
+        contentRef: printRef,
+        documentTitle: `Label_${showBarcodeModal?.name || 'Inventory'}`,
+    });
+
     useEffect(() => { fetchProducts(); }, []);
 
     const fetchProducts = async () => {
@@ -704,7 +696,7 @@ const AdminInventory = () => {
     const handleEditProduct = async (e) => {
         e.preventDefault();
         try {
-            const variants   = SIZES.filter(s => Number(editForm.sizes[s]?.stock) > 0 || editForm.sizes[s]?.sku)
+            const variants   = SIZES.filter(s => Number(editForm.sizes[s]?.stock) > 0)
                 .map(s => ({ size:s, sku:editForm.sizes[s]?.sku || generateSKU(editForm.category, editForm.name, s), stock:Number(editForm.sizes[s]?.stock || 0) }));
             const totalStock = variants.reduce((a, b) => a + b.stock, 0);
             const formData = new FormData();
@@ -1055,85 +1047,138 @@ const AdminInventory = () => {
                 </div>
             )}
 
-            {/* FIX 2: BARCODE MODAL — print safe, all variants, white bg */}
-            {showBarcodeModal && (
-                <>
-                    <style>{`
-                        @media print {
-                            body > * { display: none !important; }
-                            #barcode-print-area { display: block !important; position: fixed; inset: 0; background: white; padding: 24px; z-index: 9999; }
-                            .barcode-card { break-inside: avoid; page-break-inside: avoid; }
-                            .no-print { display: none !important; }
-                        }
-                    `}</style>
+            {/* ── PROFESSIONAL INVENTORY LABEL MODAL ────────────────────────── */}
+            {showBarcodeModal && (() => {
+                const labelProduct = showBarcodeModal;
+                const labelVariants = labelProduct.variants?.length
+                    ? labelProduct.variants
+                    : [{ size: 'ONE SIZE', sku: labelProduct.sku, stock: labelProduct.stock }];
+                const printDate = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+                const catPrefix = CATEGORIES.find(c => c.value === labelProduct.category)?.prefix || 'GEN';
+
+                return (
                     <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
-                        <div className="bg-[#0f172a] rounded-2xl w-full max-w-2xl border border-slate-700 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-                            <div className="p-4 sm:p-6 border-b border-slate-800 flex justify-between items-start gap-3 bg-[#1e293b] shrink-0 no-print">
-                                <div className="min-w-0">
-                                    <h3 className="text-lg sm:text-xl font-black text-white flex items-center gap-2">
-                                        <BiBarcodeReader className="text-indigo-400 shrink-0"/> Barcode Sheet
-                                    </h3>
-                                    <p className="text-slate-400 text-xs sm:text-sm mt-0.5 truncate">{showBarcodeModal.name} — All Sizes</p>
-                                </div>
-                                <div className="flex gap-2 shrink-0">
-                                    <button onClick={() => window.print()}
-                                        className="px-3 sm:px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-bold rounded-xl flex items-center gap-1.5 transition-all">
-                                        <FiDownload size={13}/> Print All
-                                    </button>
+                        <div className="bg-[#0f172a] rounded-2xl w-full max-w-2xl border border-slate-700 shadow-2xl overflow-hidden flex flex-col max-h-[95vh]">
+
+                            {/* ── Modal Header ── */}
+                            <div className="p-5 border-b border-slate-800 bg-[#1e293b] shrink-0">
+                                <div className="flex justify-between items-start gap-3">
+                                    <div className="min-w-0 flex-1">
+                                        <h3 className="text-lg font-black text-white flex items-center gap-2.5">
+                                            <div className="w-9 h-9 rounded-xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center shrink-0">
+                                                <BiBarcodeReader className="text-indigo-400" size={18}/>
+                                            </div>
+                                            Inventory Labels
+                                        </h3>
+                                        <p className="text-slate-500 text-xs mt-1.5 ml-[46px]">
+                                            <span className="text-slate-300 font-bold">{labelProduct.name}</span>
+                                            <span className="mx-1.5">·</span>
+                                            {labelVariants.length} label{labelVariants.length > 1 ? 's' : ''} ready
+                                        </p>
+                                    </div>
                                     <button onClick={() => setShowBarcodeModal(null)}
-                                        className="text-slate-400 hover:text-white p-2 bg-slate-800 rounded-xl">
+                                        className="text-slate-400 hover:text-white p-2 bg-slate-800 hover:bg-slate-700 rounded-xl transition-colors shrink-0">
                                         <FiX size={18}/>
                                     </button>
                                 </div>
-                            </div>
-                            <div id="barcode-print-area" className="p-4 sm:p-6 overflow-y-auto flex-1">
-                                <div className="bg-[#1e293b] rounded-xl p-4 mb-5 flex justify-between items-center border border-slate-700">
-                                    <div className="min-w-0 mr-3">
-                                        <p className="font-black text-white text-base leading-tight">{showBarcodeModal.name}</p>
-                                        <p className="text-slate-400 text-xs mt-0.5">
-                                            {showBarcodeModal.category} · ₹{Number(showBarcodeModal.price || 0).toFixed(2)}
-                                            {showBarcodeModal.color && ` · ${showBarcodeModal.color}`}
-                                        </p>
+
+                                {/* Print action bar */}
+                                <div className="mt-4 flex items-center gap-3 bg-gradient-to-r from-indigo-500/10 to-violet-500/10 border border-indigo-500/20 rounded-xl p-3">
+                                    <BiPrinter size={20} className="text-indigo-400 shrink-0"/>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-indigo-200 font-bold text-xs">Print-ready Code-128 labels</p>
+                                        <p className="text-indigo-400/60 text-[10px] mt-0.5">Optimized for thermal & laser label printers</p>
                                     </div>
-                                    <div className="text-right shrink-0">
-                                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Total Units</p>
-                                        <p className="text-2xl font-black text-white">
-                                            {(showBarcodeModal.variants || []).reduce((a, v) => a + Number(v.stock || 0), 0) || showBarcodeModal.stock || 0}
-                                        </p>
-                                    </div>
+                                    <button onClick={handlePrint}
+                                        className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white text-sm font-bold rounded-xl flex items-center gap-2 shadow-xl shadow-indigo-900/40 transition-all whitespace-nowrap">
+                                        <FiDownload size={14}/> Print / PDF
+                                    </button>
                                 </div>
-                                {/* All barcode cards — white bg for printing */}
-                                <div className="grid grid-cols-2 gap-3">
-                                    {(showBarcodeModal.variants?.length
-                                        ? showBarcodeModal.variants
-                                        : [{ size: 'ONE SIZE', sku: showBarcodeModal.sku, stock: showBarcodeModal.stock }]
-                                    ).map(v => (
-                                        <div key={v.size}
-                                            className="barcode-card bg-white rounded-xl p-4 border border-slate-200 space-y-3">
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-2xl font-black text-slate-800">{v.size}</span>
-                                                <span className={`text-xs font-bold px-2.5 py-1 rounded-lg border
-                                                    ${Number(v.stock) <= 0 ? 'bg-red-50 text-red-600 border-red-200'
-                                                    : Number(v.stock) <= 5 ? 'bg-orange-50 text-orange-600 border-orange-200'
-                                                    : 'bg-emerald-50 text-emerald-600 border-emerald-200'}`}>
-                                                    {v.stock} in stock
-                                                </span>
-                                            </div>
-                                            <div className="py-2 flex justify-center bg-white">
-                                                <BarcodeDisplay sku={v.sku} size="lg"/>
-                                            </div>
-                                            <div className="bg-slate-50 rounded-lg px-3 py-2 border border-slate-100">
-                                                <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mb-0.5">SKU</p>
-                                                <p className="font-mono text-[11px] text-slate-700 font-bold break-all">{v.sku || '—'}</p>
-                                            </div>
+                            </div>
+
+                            {/* ── Scrollable Label Preview ── */}
+                            <div className="flex-1 overflow-y-auto p-5" style={{ scrollbarWidth: 'thin', scrollbarColor: '#334155 transparent' }}>
+                                <p className="text-[10px] text-slate-600 font-black tracking-[0.2em] uppercase mb-3 text-center">
+                                    Label Preview — {labelVariants.length} tag{labelVariants.length > 1 ? 's' : ''}
+                                </p>
+
+                                <div className="border border-slate-700/60 rounded-xl overflow-hidden bg-slate-900/30 p-4">
+                                    {/* ── PRINT CANVAS — this is what react-to-print captures ── */}
+                                    <div ref={printRef} style={{ background: '#fff', padding: 24, width: '100%' }}>
+                                        <style type="text/css" media="print">{`
+                                            @page { size: auto; margin: 8mm; }
+                                            body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+                                            .label-grid { display: grid !important; grid-template-columns: repeat(2, 1fr) !important; gap: 16px !important; }
+                                            .label-card { break-inside: avoid; page-break-inside: avoid; }
+                                        `}</style>
+
+                                        <div className="label-grid" style={{
+                                            display: 'grid',
+                                            gridTemplateColumns: 'repeat(2, 1fr)',
+                                            gap: 16,
+                                        }}>
+                                            {labelVariants.map((v, idx) => (
+                                                <div key={v.size + idx} className="label-card" style={{
+                                                    border: '1.5px solid #e2e8f0',
+                                                    borderRadius: 8,
+                                                    padding: '20px 10px',
+                                                    background: '#ffffff',
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    breakInside: 'avoid',
+                                                }}>
+                                                    {/* Barcode Component */}
+                                                    <div style={{ textAlign: 'center' }}>
+                                                        <PrintBarcode sku={v.sku} width={1.8} height={50} />
+                                                    </div>
+
+                                                    {/* Below Barcode Info: SKU and Size Only */}
+                                                    <div style={{
+                                                        marginTop: 12,
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        gap: 16,
+                                                        width: '100%',
+                                                    }}>
+                                                        {/* SKU Text */}
+                                                        <div style={{
+                                                            fontFamily: '"Courier New", Courier, monospace',
+                                                            fontSize: 13,
+                                                            fontWeight: 800,
+                                                            color: '#0f172a',
+                                                            letterSpacing: '0.1em',
+                                                        }}>
+                                                            {v.sku || '—'}
+                                                        </div>
+
+                                                        {/* Size Badge */}
+                                                        <div style={{
+                                                            background: '#f8fafc',
+                                                            border: '1px solid #cbd5e1',
+                                                            color: '#334155',
+                                                            fontWeight: 800,
+                                                            fontSize: 11,
+                                                            padding: '2px 8px',
+                                                            borderRadius: 4,
+                                                            textAlign: 'center',
+                                                            fontFamily: 'system-ui, -apple-system, sans-serif',
+                                                        }}>
+                                                            SIZE: {v.size}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
                                         </div>
-                                    ))}
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </>
-            )}
+                );
+            })()}
 
             {/* ADD MODAL */}
             {showAddModal && (
