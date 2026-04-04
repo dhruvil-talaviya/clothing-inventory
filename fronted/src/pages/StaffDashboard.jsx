@@ -1515,45 +1515,30 @@ const StaffDashboard = () => {
                             {/* ── Pagination Footer ── */}
                             {totalPages > 1 && (
                                 <div className="flex items-center justify-between px-4 py-3 border-t border-slate-800 bg-[#0a0f1e]/60">
-                                    <p className="text-xs text-slate-500">
-                                        Showing{' '}
-                                        <span className="text-white font-bold">{pageStart+1}–{Math.min(pageStart+HISTORY_PER_PAGE, filteredHistory.length)}</span>
-                                        {' '}of{' '}
-                                        <span className="text-white font-bold">{filteredHistory.length}</span>
-                                    </p>
-                                    <div className="flex items-center gap-1">
+                                    <div className="flex-1 text-xs text-slate-500 hidden sm:block">
+                                        Showing <span className="text-white font-bold">{pageStart+1}–{Math.min(pageStart+HISTORY_PER_PAGE, filteredHistory.length)}</span> of <span className="text-white font-bold">{filteredHistory.length}</span>
+                                    </div>
+                                    <div className="flex items-center justify-center gap-4 flex-1 sm:flex-none w-full sm:w-auto">
                                         {/* Prev */}
                                         <button
                                             onClick={()=>setHistoryPage(p=>Math.max(1,p-1))}
                                             disabled={safePage<=1}
-                                            className="px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-800 bg-slate-900 text-slate-400 hover:text-white hover:border-slate-600 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                                            className="px-4 py-1.5 text-xs font-bold rounded-lg border border-slate-800 bg-slate-900 text-slate-400 hover:text-white hover:border-slate-600 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                                         >← Prev</button>
 
-                                        {/* Page numbers */}
-                                        {Array.from({length:totalPages},(_,i)=>i+1)
-                                            .filter(p=> p===1 || p===totalPages || Math.abs(p-safePage)<=1)
-                                            .reduce((acc,p,idx,arr)=>{
-                                                if(idx>0 && p-arr[idx-1]>1) acc.push('…');
-                                                acc.push(p);
-                                                return acc;
-                                            },[])
-                                            .map((p,idx)=> typeof p==='string' ? (
-                                                <span key={'dot'+idx} className="px-1 text-slate-600 text-xs select-none">…</span>
-                                            ) : (
-                                                <button key={p} onClick={()=>setHistoryPage(p)}
-                                                    className={`w-8 h-8 text-xs font-bold rounded-lg border transition-all ${p===safePage?'bg-indigo-600 text-white border-indigo-500':'bg-slate-900 text-slate-400 border-slate-800 hover:text-white hover:border-slate-600'}`}>
-                                                    {p}
-                                                </button>
-                                            ))
-                                        }
+                                        {/* Page Indicator */}
+                                        <div className="text-xs font-medium text-slate-400">
+                                            Page <span className="text-white font-bold">{safePage}</span> of {totalPages}
+                                        </div>
 
                                         {/* Next */}
                                         <button
                                             onClick={()=>setHistoryPage(p=>Math.min(totalPages,p+1))}
                                             disabled={safePage>=totalPages}
-                                            className="px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-800 bg-slate-900 text-slate-400 hover:text-white hover:border-slate-600 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                                            className="px-4 py-1.5 text-xs font-bold rounded-lg border border-slate-800 bg-slate-900 text-slate-400 hover:text-white hover:border-slate-600 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                                         >Next →</button>
                                     </div>
+                                    <div className="flex-1 hidden sm:block"></div>
                                 </div>
                             )}
                         </div>
