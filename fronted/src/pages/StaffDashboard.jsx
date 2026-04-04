@@ -995,57 +995,161 @@ const StaffDashboard = () => {
             <main className="flex-1 flex flex-col overflow-hidden min-w-0 pb-16 sm:pb-0">
 
                 {/* ══ HOME ══ */}
-                {view==='home'&&(
-                    <div className="p-4 sm:p-6 h-full overflow-y-auto ds">
-                        <header className="flex justify-between items-start gap-3 mb-6">
+                {view === 'home' && (
+                    <div className="p-4 sm:p-6 lg:p-8 h-full overflow-y-auto ds relative">
+                        {/* Background glow effects */}
+                        <div className="absolute top-0 left-1/4 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none fade-in-up"></div>
+                        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl pointer-events-none fade-in-up"></div>
+
+                        {/* Premium Header */}
+                        <header className="relative flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 mb-8">
                             <div>
-                                <h1 className="text-xl sm:text-2xl font-black text-white">Retail Command Center</h1>
-                                <p className="text-slate-500 text-xs sm:text-sm mt-0.5">Operator: <span className="text-indigo-400 font-bold">{currentUser?.name}</span></p>
+                                <h1 className="text-3xl sm:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 tracking-tight">Command Center</h1>
+                                <p className="text-slate-400 font-medium text-sm mt-1 sm:mt-2">Operator: <span className="text-white font-bold">{currentUser?.name}</span></p>
                             </div>
-                            <div className="bg-[#0F172A] border border-slate-800 px-3 py-2 sm:px-4 sm:py-3 rounded-xl text-right shrink-0">
-                                <p className="text-lg sm:text-2xl font-mono font-bold text-white">{currentTime.toLocaleTimeString()}</p>
-                                <p className="text-[10px] text-slate-500 mt-0.5 font-bold uppercase tracking-wider">Shift: {shiftDuration}</p>
+                            <div className="flex bg-[#0f172a]/80 backdrop-blur-md border border-slate-700/50 p-1.5 rounded-2xl shadow-xl">
+                                <div className="px-4 py-2 bg-[#1e293b] rounded-xl flex items-center gap-3 border border-slate-700">
+                                    <div className="relative flex h-3 w-3">
+                                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                      <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500 border-2 border-[#1e293b]"></span>
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-none mb-1">Live Shift</p>
+                                        <p className="text-sm font-mono font-black text-white leading-none">{shiftDuration}</p>
+                                    </div>
+                                </div>
+                                <div className="px-4 py-3 flex flex-col justify-center">
+                                    <p className="text-sm sm:text-base font-mono font-bold text-slate-300 leading-none">{currentTime.toLocaleTimeString()}</p>
+                                </div>
                             </div>
                         </header>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-6">
-                            <StatCard title="Today's Revenue" value={`Rs.${safeNum(stats.revenue).toFixed(2)}`} icon={<FiCreditCard/>} color="indigo"/>
-                            <StatCard title="Today's Sales"   value={safeNum(stats.count)}                     icon={<FiCheckCircle/>} color="emerald"/>
-                            <StatCard title="Shift Timer"     value={shiftDuration}                            icon={<FiClock/>}       color="blue"/>
-                        </div>
-                        {eventsWithLiveStatus.filter(e=>e._liveStatus==='Active').length>0&&(
-                            <div className="mb-5 p-3.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl flex items-center gap-3">
-                                <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse shrink-0"/>
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-emerald-400 font-black text-sm">Active Events Running Now</p>
-                                    <p className="text-emerald-300/70 text-xs mt-0.5 truncate">{eventsWithLiveStatus.filter(e=>e._liveStatus==='Active').map(e=>e.title).join(' • ')}</p>
+
+                        {/* Hero Stats (Glassmorphism) */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 mb-8 relative">
+                            <div className="bg-gradient-to-br from-indigo-500/10 to-transparent border border-indigo-500/20 backdrop-blur-xl rounded-3xl p-6 sm:p-8 flex flex-col relative overflow-hidden group">
+                                <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:opacity-20 transition-opacity transform group-hover:scale-110 group-hover:rotate-12 duration-500">
+                                    <FiDollarSign size={80} className="text-indigo-400"/>
                                 </div>
-                                <button onClick={()=>setView('events')} className="text-xs text-emerald-400 font-bold hover:underline shrink-0">View →</button>
+                                <h3 className="text-indigo-400 text-xs sm:text-sm font-black uppercase tracking-widest mb-2 flex items-center gap-2"><FiCreditCard/> Today's Revenue</h3>
+                                <p className="text-4xl sm:text-5xl font-black text-white tracking-tight">Rs. {safeNum(stats.revenue).toFixed(2)}</p>
+                                <div className="mt-4 inline-flex items-center gap-1.5 bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 text-[10px] font-bold px-2.5 py-1 rounded-full w-fit">
+                                    <FiCalendar size={10}/> Data matching {currentTime.toLocaleDateString()}
+                                </div>
                             </div>
-                        )}
-                        <div className="bg-[#0F172A] rounded-2xl border border-slate-800 p-6">
-                            <h2 className="text-lg font-bold text-white mb-4">Recent Sales</h2>
-                            {salesHistory.length===0?<p className="text-slate-500 text-sm">No sales recorded yet.</p>:(
-                                <div className="space-y-2.5">
-                                    {salesHistory.slice(0,5).map(sale=>{
-                                        const qty=safeArr(sale.items).reduce((s,i)=>s+safeNum(i.quantity,1),0);
-                                        return (
-                                            <div key={sale._id} className="flex items-center justify-between p-3.5 bg-[#080C14] rounded-xl border border-slate-800 hover:border-indigo-500/40 transition-colors">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-9 h-9 bg-indigo-500/10 text-indigo-400 rounded-full flex items-center justify-center shrink-0"><FiFileText size={14}/></div>
-                                                    <div>
-                                                        <p className="font-bold text-white text-sm">{safeStr(sale.customerName,'Walk-in')}</p>
-                                                        <p className="text-xs text-slate-500">{new Date(sale.date||sale.createdAt).toLocaleTimeString()} • {qty} item{qty!==1?'s':''}</p>
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center gap-3">
-                                                    <span className="font-mono font-bold text-emerald-400 text-sm">+Rs.{safeNum(sale.totalAmount).toFixed(2)}</span>
-                                                    <button onClick={()=>setSelectedSale(sale)} className="p-1.5 bg-slate-800 text-slate-400 hover:text-white rounded-lg transition-colors"><FiEye size={13}/></button>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
+                            <div className="bg-gradient-to-br from-emerald-500/10 to-transparent border border-emerald-500/20 backdrop-blur-xl rounded-3xl p-6 sm:p-8 flex flex-col relative overflow-hidden group">
+                                <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:opacity-20 transition-opacity transform group-hover:scale-110 group-hover:rotate-12 duration-500">
+                                    <FiCheckCircle size={80} className="text-emerald-400"/>
                                 </div>
-                            )}
+                                <h3 className="text-emerald-400 text-xs sm:text-sm font-black uppercase tracking-widest mb-2 flex items-center gap-2"><FiPackage/> Total Sales Executed</h3>
+                                <p className="text-4xl sm:text-5xl font-black text-white tracking-tight">{safeNum(stats.count)}<span className="text-lg sm:text-xl text-emerald-500/50 ml-2">units closed</span></p>
+                                <div className="mt-4 inline-flex items-center gap-1.5 bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-[10px] font-bold px-2.5 py-1 rounded-full w-fit">
+                                    <FiCheckCircle size={10}/> verified transactions
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Quick Actions Grid */}
+                        <div className="mb-8">
+                            <h2 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2"><FiGrid/> Quick Actions</h2>
+                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                                <button onClick={()=>setView('pos')} className="bg-[#0f172a]/80 backdrop-blur relative overflow-hidden border border-slate-700/60 hover:border-indigo-500/50 hover:bg-indigo-500/10 transition-all rounded-2xl p-4 sm:p-5 flex flex-col items-start gap-4 group text-left">
+                                    <div className="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center text-indigo-400 group-hover:scale-110 transition-transform"><BiBarcodeReader size={20}/></div>
+                                    <div><p className="font-bold text-white text-sm sm:text-base">Start Billing</p><p className="text-[10px] text-slate-500 mt-1 line-clamp-1">Open POS scanner</p></div>
+                                </button>
+                                <button onClick={()=>setView('events')} className="bg-[#0f172a]/80 backdrop-blur relative overflow-hidden border border-slate-700/60 hover:border-pink-500/50 hover:bg-pink-500/10 transition-all rounded-2xl p-4 sm:p-5 flex flex-col items-start gap-4 group text-left">
+                                    <div className="w-10 h-10 rounded-xl bg-pink-500/20 flex items-center justify-center text-pink-400 group-hover:scale-110 transition-transform"><FiStar size={20}/></div>
+                                    <div><p className="font-bold text-white text-sm sm:text-base">Live Events</p><p className="text-[10px] text-slate-500 mt-1 line-clamp-1">View store promos</p></div>
+                                </button>
+                                <button onClick={()=>setView('history')} className="bg-[#0f172a]/80 backdrop-blur relative overflow-hidden border border-slate-700/60 hover:border-emerald-500/50 hover:bg-emerald-500/10 transition-all rounded-2xl p-4 sm:p-5 flex flex-col items-start gap-4 group text-left">
+                                    <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-400 group-hover:scale-110 transition-transform"><FiFileText size={20}/></div>
+                                    <div><p className="font-bold text-white text-sm sm:text-base">Sales History</p><p className="text-[10px] text-slate-500 mt-1 line-clamp-1">Find past invoices</p></div>
+                                </button>
+                                <button onClick={()=>setView('settings')} className="bg-[#0f172a]/80 backdrop-blur relative overflow-hidden border border-slate-700/60 hover:border-slate-400/50 hover:bg-slate-800 transition-all rounded-2xl p-4 sm:p-5 flex flex-col items-start gap-4 group text-left">
+                                    <div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center text-slate-300 group-hover:scale-110 transition-transform"><FiSettings size={20}/></div>
+                                    <div><p className="font-bold text-white text-sm sm:text-base">Preferences</p><p className="text-[10px] text-slate-500 mt-1 line-clamp-1">Update shift profile</p></div>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            {/* Active Event Banner */}
+                            <div className="lg:col-span-1">
+                                <h2 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2"><FiCalendar/> Store Promotions</h2>
+                                {eventsWithLiveStatus.filter(e=>e._liveStatus==='Active').length > 0 ? (
+                                    <div className="space-y-4">
+                                        {eventsWithLiveStatus.filter(e=>e._liveStatus==='Active').slice(0,2).map(e => (
+                                            <div key={e._id} className="relative overflow-hidden rounded-2xl border border-yellow-500/30 bg-gradient-to-br from-yellow-500/10 to-orange-500/5 p-5 group hover:border-yellow-500/50 transition-colors">
+                                                <div className="absolute top-0 right-0 p-4 opacity-10"><FiStar size={60} className="text-yellow-400"/></div>
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-yellow-500"></span></span>
+                                                    <span className="text-[10px] text-yellow-400 font-bold uppercase tracking-widest">Active Now</span>
+                                                </div>
+                                                <h3 className="text-lg font-black text-white mb-1 leading-snug">{safeStr(e.title)}</h3>
+                                                <p className="text-xs text-yellow-200/60 line-clamp-2">{safeStr(e.description)}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="bg-[#0f172a]/60 border border-slate-800/80 rounded-2xl p-6 flex flex-col items-center justify-center text-center h-40">
+                                        <div className="w-10 h-10 bg-slate-800 rounded-full flex items-center justify-center mb-3"><FiCalendar className="text-slate-500"/></div>
+                                        <p className="text-sm font-bold text-slate-400">No active promotions</p>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Recent Sales Feed */}
+                            <div className="lg:col-span-2">
+                                <h2 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2"><FiClock/> Live Activity Feed</h2>
+                                <div className="bg-[#0f172a]/80 backdrop-blur-lg rounded-3xl border border-slate-700/60 overflow-hidden">
+                                     {salesHistory.length === 0 ? (
+                                        <div className="p-10 flex flex-col items-center justify-center text-center">
+                                            <FiShoppingCart size={32} className="text-slate-600 mb-3"/>
+                                            <p className="text-slate-400 font-bold">Waiting for first sale...</p>
+                                        </div>
+                                     ) : (
+                                        <div className="divide-y divide-slate-800/50">
+                                            {salesHistory.slice(0, 5).map((sale, idx) => {
+                                                const qty = safeArr(sale.items).reduce((s,i)=>s+safeNum(i.quantity,1),0);
+                                                const payType = (sale.paymentMethod || 'cash').toLowerCase();
+                                                const isCash = payType === 'cash';
+                                                const isUpi = payType === 'upi';
+                                                return (
+                                                    <div key={sale._id} className="flex items-center justify-between p-4 sm:p-5 hover:bg-slate-800/30 transition-colors group">
+                                                        <div className="flex items-center gap-4">
+                                                            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-slate-800 flex flex-col items-center justify-center border border-slate-700 group-hover:border-indigo-500/50 transition-colors shrink-0">
+                                                                <span className="text-[10px] text-slate-500 font-black uppercase tracking-widest leading-none mb-0.5">Qty</span>
+                                                                <span className="text-sm font-black text-white leading-none">{qty}</span>
+                                                            </div>
+                                                            <div>
+                                                                <p className="font-bold text-white text-sm sm:text-base flex items-center gap-2">
+                                                                    {safeStr(sale.customerName,'Walk-in Customer')}
+                                                                    {idx === 0 && <span className="bg-emerald-500/20 text-emerald-400 text-[9px] px-1.5 py-0.5 rounded border border-emerald-500/30 uppercase tracking-widest">New</span>}
+                                                                </p>
+                                                                <p className="text-xs text-slate-500 mt-1 flex items-center gap-1.5">
+                                                                    <FiClock size={10}/> {new Date(sale.date||sale.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-4 sm:gap-6">
+                                                            <div className="hidden sm:block">
+                                                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${isCash ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : isUpi ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : 'bg-blue-500/10 text-blue-400 border-blue-500/20'}`}>
+                                                                    {payType}
+                                                                </span>
+                                                            </div>
+                                                            <div className="text-right flex flex-col items-end">
+                                                                <p className="font-mono font-black text-white text-sm sm:text-base">Rs. {safeNum(sale.totalAmount).toFixed(2)}</p>
+                                                                <button onClick={()=>setSelectedSale(sale)} className="text-[10px] font-bold text-indigo-400 hover:text-indigo-300 mt-1 uppercase tracking-widest transition-colors flex items-center gap-1">
+                                                                    Invoice <FiEye size={10}/>
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                     )}
+                                </div>
+                            </div>
                         </div>
                     </div>
                 )}
