@@ -41,14 +41,11 @@ const Avatar = ({ name, photo, isActive, size = 'md' }) => {
 const Toast = ({ msg }) => {
     if (!msg.text) return null;
     return (
-        <div className={`fixed top-5 right-5 z-[300] px-5 py-4 rounded-2xl font-bold text-white flex items-center gap-3 shadow-2xl border animate-slide-in
-            ${msg.type === 'success'
-                ? 'bg-[#0f172a] border-emerald-500/40 shadow-emerald-500/10'
-                : 'bg-[#0f172a] border-red-500/40 shadow-red-500/10'}`}>
-            {msg.type === 'success'
-                ? <FiCheckCircle className="text-emerald-400 shrink-0" size={16}/>
-                : <FiAlertCircle className="text-red-400 shrink-0" size={16}/>}
-            <span className="text-sm">{msg.text}</span>
+        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[500] pointer-events-none animate-fade-in-up">
+            <div className={`px-6 py-3 rounded-full shadow-2xl border backdrop-blur-xl text-sm font-semibold tracking-wide whitespace-nowrap
+                ${msg.type === 'error' ? 'bg-red-950/90 border-red-900/50 text-red-200' : 'bg-slate-900/90 border-slate-700/50 text-slate-200'}`}>
+                {msg.text}
+            </div>
         </div>
     );
 };

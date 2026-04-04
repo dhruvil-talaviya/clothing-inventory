@@ -941,10 +941,12 @@ const StaffDashboard = () => {
             <DarkScrollStyle/>
 
             {/* TOAST */}
-            {toast&&(
-                <div className={`fixed top-4 left-4 right-4 sm:left-auto sm:right-4 sm:w-auto z-[400] px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2.5 font-bold text-white border text-sm ${toast.type==='error'?'bg-red-900/95 border-red-700':'bg-[#1e293b] border-indigo-600'}`}>
-                    {toast.type==='error'?<FiAlertTriangle className="text-red-400 shrink-0" size={15}/>:<FiCheckCircle className="text-emerald-400 shrink-0" size={15}/>}
-                    {toast.text}
+            {toast && (
+                <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[500] pointer-events-none animate-fade-in-up">
+                    <div className={`px-6 py-3 rounded-full shadow-2xl border backdrop-blur-xl text-sm font-semibold tracking-wide whitespace-nowrap
+                        ${toast.type === 'error' ? 'bg-red-950/90 border-red-900/50 text-red-200' : 'bg-slate-900/90 border-slate-700/50 text-slate-200'}`}>
+                        {toast.text}
+                    </div>
                 </div>
             )}
 

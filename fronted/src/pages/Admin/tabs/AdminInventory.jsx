@@ -772,10 +772,11 @@ const AdminInventory = () => {
 
             {/* TOAST */}
             {msg.text && (
-                <div className={`fixed top-4 right-4 z-[200] px-4 py-3 rounded-xl font-bold text-white flex items-center gap-2.5 shadow-2xl text-sm max-w-[calc(100vw-2rem)]
-                    ${msg.type === 'success' ? 'bg-emerald-600 border border-emerald-500' : 'bg-red-600 border border-red-500'}`}>
-                    {msg.type === 'success' ? <FiCheckCircle size={16}/> : <FiAlertCircle size={16}/>}
-                    <span className="truncate">{msg.text}</span>
+                <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[500] pointer-events-none animate-fade-in-up">
+                    <div className={`px-6 py-3 rounded-full shadow-2xl border backdrop-blur-xl text-sm font-semibold tracking-wide whitespace-nowrap
+                        ${msg.type === 'error' ? 'bg-red-950/90 border-red-900/50 text-red-200' : 'bg-slate-900/90 border-slate-700/50 text-slate-200'}`}>
+                        {msg.text}
+                    </div>
                 </div>
             )}
 

@@ -68,10 +68,11 @@ const AdminOffers = () => {
 
             {/* TOAST */}
             {toast && (
-                <div className={`fixed top-5 right-5 z-[200] px-5 py-4 rounded-2xl font-bold text-white flex items-center gap-3 shadow-2xl border
-                    ${toast.type === 'success' ? 'bg-emerald-700 border-emerald-500' : 'bg-red-700 border-red-500'}`}>
-                    {toast.type === 'success' ? <FiCheckCircle size={18}/> : <FiAlertCircle size={18}/>}
-                    {toast.text}
+                <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[500] pointer-events-none animate-fade-in-up">
+                    <div className={`px-6 py-3 rounded-full shadow-2xl border backdrop-blur-xl text-sm font-semibold tracking-wide whitespace-nowrap
+                        ${toast.type === 'error' ? 'bg-red-950/90 border-red-900/50 text-red-200' : 'bg-slate-900/90 border-slate-700/50 text-slate-200'}`}>
+                        {toast.text}
+                    </div>
                 </div>
             )}
 
