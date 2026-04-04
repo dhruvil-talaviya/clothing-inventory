@@ -1114,10 +1114,14 @@ const StaffDashboard = () => {
                                     )}
                                 </div>
                                 <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
-                                    <div className="px-4 py-2.5 border-b border-slate-800 bg-slate-950/40 flex items-center justify-between">
-                                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-600">Recent Transactions</span>
-                                        <span className="text-[9px] text-slate-700">Showing {Math.min(salesHistory.length,5)} of {salesHistory.length}</span>
+                                    {/* Column header */}
+                                    <div className="grid grid-cols-[28px_1fr_64px_80px] gap-3 items-center px-4 py-2 border-b border-slate-800 bg-slate-950/50">
+                                        <span></span>
+                                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-600">Customer</span>
+                                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-600 text-center">Payment</span>
+                                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-600 text-right">Amount</span>
                                     </div>
+
                                     {salesHistory.length === 0 ? (
                                         <div className="flex flex-col items-center justify-center text-center py-12 px-6">
                                             <div className="w-12 h-12 bg-slate-800 rounded-full flex items-center justify-center mb-3">
@@ -1133,35 +1137,50 @@ const StaffDashboard = () => {
                                                 const payKey  = (sale.paymentMethod || 'cash').toLowerCase();
                                                 const payConf = {
                                                     cash: {label:'Cash', cls:'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'},
-                                                    upi:  {label:'UPI',  cls:'text-violet-400 bg-violet-500/10 border-violet-500/20'},
-                                                    card: {label:'Card', cls:'text-blue-400 bg-blue-500/10 border-blue-500/20'},
+                                                    upi:  {label:'UPI',  cls:'text-violet-400  bg-violet-500/10  border-violet-500/20'},
+                                                    card: {label:'Card', cls:'text-blue-400    bg-blue-500/10    border-blue-500/20'},
                                                 };
                                                 const pay     = payConf[payKey] || payConf.cash;
                                                 const timeStr = new Date(sale.date||sale.createdAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
                                                 const isFirst = idx === 0;
                                                 return (
-                                                    <div key={sale._id} className={`flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-slate-800/40 ${isFirst ? 'bg-indigo-500/5' : ''}`}>
+                                                    <div key={sale._id} className={`grid grid-cols-[28px_1fr_64px_80px] gap-3 items-center px-4 py-3.5 transition-colors hover:bg-slate-800/30 ${isFirst ? 'bg-indigo-500/5' : ''}`}>
+
+                                                        {/* # badge */}
                                                         <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 border ${isFirst ? 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30' : 'bg-slate-800 text-slate-600 border-slate-700'}`}>
                                                             {idx+1}
                                                         </div>
-                                                        <div className="flex-1 min-w-0">
-                                                            <div className="flex items-center gap-2 flex-wrap">
-                                                                <p className="font-semibold text-white text-sm truncate">{safeStr(sale.customerName,'Walk-in')}</p>
-                                                                {isFirst && <span className="text-[9px] bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 px-1.5 py-0.5 rounded font-black uppercase tracking-widest shrink-0">Latest</span>}
+
+                                                        {/* Customer info */}
+                                                        <div className="min-w-0">
+                                                            <div className="flex items-center gap-1.5 mb-0.5">
+                                                                <p className="font-semibold text-white text-sm leading-none truncate">{safeStr(sale.customerName,'Walk-in')}</p>
+                                                                {isFirst && (
+                                                                    <span className="shrink-0 text-[8px] bg-indigo-500 text-white px-1.5 py-0.5 rounded-full font-black uppercase tracking-widest leading-none">
+                                                                        New
+                                                                    </span>
+                                                                )}
                                                             </div>
-                                                            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                                                                <span className="text-[10px] text-slate-600 flex items-center gap-1"><FiClock size={9}/> {timeStr}</span>
-                                                                <span className="text-[10px] text-slate-700">·</span>
-                                                                <span className="text-[10px] text-slate-600">{qty} item{qty!==1?'s':''}</span>
-                                                                <span className={`text-[9px] px-1.5 py-0.5 rounded border font-black uppercase tracking-widest ${pay.cls}`}>{pay.label}</span>
-                                                            </div>
+                                                            <p className="text-[10px] text-slate-600 flex items-center gap-1 leading-none">
+                                                                <FiClock size={9}/> {timeStr} · {qty} item{qty!==1?'s':''}
+                                                            </p>
                                                         </div>
-                                                        <div className="flex flex-col items-end shrink-0 gap-1">
-                                                            <p className="font-mono font-black text-white text-sm">Rs.{safeNum(sale.totalAmount).toFixed(2)}</p>
-                                                            <button onClick={()=>setSelectedSale(sale)} className="flex items-center gap-1 text-[10px] text-slate-500 hover:text-indigo-400 transition-colors uppercase tracking-widest font-medium">
+
+                                                        {/* Payment badge */}
+                                                        <div className="flex justify-center">
+                                                            <span className={`text-[9px] px-2 py-1 rounded-lg border font-black uppercase tracking-wider leading-none ${pay.cls}`}>
+                                                                {pay.label}
+                                                            </span>
+                                                        </div>
+
+                                                        {/* Amount + Invoice */}
+                                                        <div className="flex flex-col items-end gap-1 min-w-0">
+                                                            <p className="font-mono font-black text-white text-sm leading-none">Rs.{safeNum(sale.totalAmount).toFixed(2)}</p>
+                                                            <button onClick={()=>setSelectedSale(sale)} className="flex items-center gap-0.5 text-[9px] text-slate-500 hover:text-indigo-400 transition-colors font-medium uppercase tracking-widest leading-none">
                                                                 <FiEye size={9}/> Invoice
                                                             </button>
                                                         </div>
+
                                                     </div>
                                                 );
                                             })}
